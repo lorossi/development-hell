@@ -1,7 +1,12 @@
 #ifndef _TERMINAL
 #define _TERMINAL
 
-#include "colors.h"
+#include <stdio.h>
+#include <sys/ioctl.h> //ioctl() and TIOCGWINSZ
+#include <unistd.h>    // for STDOUT_FILENO
+#include <termios.h>   // for cl_flag
+
+#include "colors.h" // for.. well.. colors
 
 #define ESCAPE "\x1b"
 #define CLEARALL ESCAPE "[2J"
@@ -9,23 +14,33 @@
 #define MOVEHOME ESCAPE "[H"
 #define HIDECURSOR ESCAPE "[?25l"
 #define SHOWCURSOR ESCAPE "[?25h"
+#define BELL "\a"
 
 typedef struct
 {
   int w, h;
 } Rectangle;
 
-typedef struct
-{
-  int x, y;
-} Position;
+// struct creation
+Rectangle createRectangle(int w, int h);
 
-void clear_screen();
+// terminal manipulation
+Rectangle get_terminal_size();
+void clear_terminal();
 void hide_cursor();
 void show_cursor();
-void move_to(Position p);
-Rectangle get_size();
-void write_at(Position p, char *s);
-void write_at_RGB(Position p, RGB color, char *s);
+void move_cursor_to(int x, int y);
+void reset_styles();
+void set_fg(fg_color color);
+void set_bg(bg_color color);
+void set_textmode(textmode mode);
+void reset_fg();
+void reset_bg();
+void reset_textmode();
+void set_fg_RGB(RGB color);
+void set_bg_RGB(RGB color);
+void write_at(int x, int y, char *s);
+void write_at_RGB(int x, int y, RGB color, char *s);
+void erase_at(int x, int y, int length);
 
 #endif
