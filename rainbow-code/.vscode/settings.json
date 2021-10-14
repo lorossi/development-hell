@@ -1,0 +1,13 @@
+{
+  "files.associations": {
+    "stdio.h": "c",
+    "terminal.h": "c",
+    "ioctl.h": "c",
+    "unistd.h": "c",
+    "array": "c"
+  },
+  "cSpell.words": [
+    "XREPETITIONS",
+    "YREPETITIONS"
+  ]
+}
