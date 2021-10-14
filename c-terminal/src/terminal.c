@@ -69,19 +69,31 @@ void reset_styles()
   return;
 }
 
-void set_fg(fg_color color)
+void set_styles(style styles, ...)
+{
+  va_list v;
+  va_start(v, styles);
+
+  for (int i = 0; i < styles; i++)
+    printf(ESCAPE "[%im", va_arg(v, style));
+
+  va_end(v);
+  return;
+}
+
+void set_fg(style color)
 {
   printf(ESCAPE "[%im", color);
   return;
 }
 
-void set_bg(bg_color color)
+void set_bg(style color)
 {
   printf(ESCAPE "[%im", color);
   return;
 }
 
-void set_textmode(textmode mode)
+void set_textmode(style mode)
 {
   printf(ESCAPE "[%im", mode);
 }
@@ -100,7 +112,7 @@ void reset_bg()
 
 void reset_textmode()
 {
-  set_textmode(TEXTMODE_RESET);
+  set_textmode(TEXT_RESET);
 }
 
 void set_fg_RGB(RGB color)

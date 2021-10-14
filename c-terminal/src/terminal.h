@@ -2,9 +2,10 @@
 #define _TERMINAL
 
 #include <stdio.h>
-#include <sys/ioctl.h> //ioctl() and TIOCGWINSZ
+#include <sys/ioctl.h> // ioctl() and TIOCGWINSZ
 #include <unistd.h>    // for STDOUT_FILENO
 #include <termios.h>   // for cl_flag
+#include <stdarg.h>    // for multiple parameters
 
 #include "colors.h" // for.. well.. colors
 
@@ -30,10 +31,11 @@ void clear_terminal();
 void hide_cursor();
 void show_cursor();
 void move_cursor_to(int x, int y);
+void set_styles(style styles, ...);
 void reset_styles();
-void set_fg(fg_color color);
-void set_bg(bg_color color);
-void set_textmode(textmode mode);
+void set_fg(style color);
+void set_bg(style color);
+void set_textmode(style mode);
 void reset_fg();
 void reset_bg();
 void reset_textmode();
