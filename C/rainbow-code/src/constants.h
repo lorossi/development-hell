@@ -13,4 +13,8 @@ const int YREPETITIONS = 2;
 const int SPACING = 2;
 #endif
 
+const double PI = 3.14159265359;
+const double TWO_PI = 2 * PI;
+const double TIME_SCL = 0.25;
+
 #endif
