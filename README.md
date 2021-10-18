@@ -1,6 +1,6 @@
 # Development hell
 
-*Abandon hope all ye who enter here.*, Dante interviewed about this repository.
+*Abandon hope all ye who enter here.* - Dante interviewed about this repository.
 
 In Hollywood, there's a thing called [Development hell](https://en.wikipedia.org/wiki/Development_hell). It's when a movie gets stashed for a while (eventually forever) even after people worked on it.
 
