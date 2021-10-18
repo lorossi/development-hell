@@ -110,6 +110,8 @@ void reset_bg();
 void reset_textmode();
 void set_fg_RGB(RGB color);
 void set_bg_RGB(RGB color);
+void set_fg_HSL(HSL color);
+void set_bg_HSL(HSL color);
 void write_at(int x, int y, char *s);
 void erase_at(int x, int y, int length);
 

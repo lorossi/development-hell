@@ -276,6 +276,18 @@ void set_bg_RGB(RGB color)
   return;
 }
 
+void set_fg_HSL(HSL color)
+{
+  RGB converted = HSLtoRGB(color);
+  set_fg_RGB(converted);
+}
+
+void set_bg_HSL(HSL color)
+{
+  RGB converted = HSLtoRGB(color);
+  set_bg_RGB(converted);
+}
+
 /* Writes a string at certain x,y coordinates (zero-indexed). */
 void write_at(int x, int y, char *s)
 {
@@ -292,6 +304,5 @@ void erase_at(int x, int y, int length)
     move_cursor_to(x, y);
     printf(" ");
   }
-
   return;
 }
