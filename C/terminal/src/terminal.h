@@ -52,10 +52,10 @@ static const style FAINT = 2;
 static const style ITALIC = 3;
 static const style UNDERLINE = 4;
 static const style BLINKING = 5;
-static const style REVERSE = 6;
-static const style HIDDEN = 7;
-static const style STRIKETHROUGH = 8;
-static const style TEXT_RESET = 9;
+static const style REVERSE = 7;
+static const style HIDDEN = 8;
+static const style STRIKETHROUGH = 9;
+static const style TEXT_RESET = 0;
 
 #define ESCAPE "\x1b"
 #define CLEARALL ESCAPE "[2J"
@@ -99,6 +99,7 @@ Rectangle get_terminal_size();
 void clear_terminal();
 void hide_cursor();
 void show_cursor();
+void move_cursor_to_bottom();
 void move_cursor_to(int x, int y);
 void set_styles(style styles, ...);
 void reset_styles();

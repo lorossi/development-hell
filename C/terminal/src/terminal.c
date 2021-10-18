@@ -54,7 +54,7 @@ RGB createRGBcolor(int R, int G, int B)
 }
 
 /* Creates a HSL struct containing the three channels. 
-H is in range 0-359, S and L are in range 0-100. */
+H is in range 0-360, S and L are in range 0-100. */
 HSL createHSLcolor(int H, int S, int L)
 {
   return (HSL){.H = H, .S = S, .L = L};
@@ -142,12 +142,11 @@ Rectangle createRectangle(int w, int h)
   return (Rectangle){.w = w, .h = h};
 }
 
-/* Clears the terminal and moves the cursor to the top left corner. */
+/* Clears the terminal and moves cursor to upper-left position. */
 void clear_terminal()
 {
-  printf(MOVEHOME);
   printf(CLEARALL);
-
+  printf(MOVEHOME);
   return;
 };
 
@@ -176,6 +175,16 @@ void show_cursor()
   tcsetattr(0, 0, &term);
 
   printf(SHOWCURSOR);
+
+  return;
+}
+
+/* Moves the cursor to the bottom of the screen. */
+void move_cursor_to_bottom()
+{
+  Rectangle terminal_size = get_terminal_size();
+  if (terminal_size.w != -1 && terminal_size.h != -1)
+    move_cursor_to(0, terminal_size.h + 1);
 
   return;
 }
@@ -210,36 +219,44 @@ void reset_styles()
   return;
 }
 
-/* Set styles for the text. Accepts a variable number of parameters. */
+/* Set styles for the text. Accepts a variable number of styles.
+The first parameter must be the number of styles. */
 void set_styles(style styles, ...)
 {
   va_list v;
   va_start(v, styles);
 
   for (int i = 0; i < styles; i++)
+  {
     printf(ESCAPE "[%im", va_arg(v, style));
+  }
+
   va_end(v);
+
   return;
 }
 
 /* Sets the foreground color of the text. */
 void set_fg(style color)
 {
-  printf(ESCAPE "[%im", color);
+  if ((color >= 30 && color <= 39) || (color >= 90 && color <= 97))
+    printf(ESCAPE "[%im", color);
   return;
 }
 
 /* Sets the background color of the text. */
 void set_bg(style color)
 {
-  printf(ESCAPE "[%im", color);
+  if ((color >= 40 && color <= 49) || (color >= 100 && color <= 107))
+    printf(ESCAPE "[%im", color);
   return;
 }
 
 /* Sets the text mode. */
 void set_textmode(style mode)
 {
-  printf(ESCAPE "[%im", mode);
+  if (mode >= 0 && mode <= 9)
+    printf(ESCAPE "[%im", mode);
 }
 
 /* Resets the foreground color of the text. */
@@ -272,7 +289,7 @@ void set_fg_RGB(RGB color)
 /* Sets the background color of the text, according to the RGB values. */
 void set_bg_RGB(RGB color)
 {
-  printf(ESCAPE "[34;2;%i;%i;%im", color.R, color.G, color.B);
+  printf(ESCAPE "[48;2;%i;%i;%im", color.R, color.G, color.B);
   return;
 }
 
