@@ -72,12 +72,16 @@ typedef struct
 
 typedef struct
 {
-  int R, G, B;
+  int R; // range [0-255]
+  int G; // range [0-255]
+  int B; // range [0-255]
 } RGB;
 
 typedef struct
 {
-  int H, S, L;
+  int H; // range [0-360]
+  int S; // range [0-100]
+  int L; // range [0-100]
 } HSL;
 
 // struct creation

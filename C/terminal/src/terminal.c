@@ -117,7 +117,7 @@ HSL RGBtoHSL(RGB color)
 
 RGB HUEtoRGB(double hue)
 {
-  HSL color = createHSLcolor(hue, 255, 127);
+  HSL color = createHSLcolor(hue, 100, 50);
   return HSLtoRGB(color);
 }
 
