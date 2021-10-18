@@ -111,7 +111,6 @@ void reset_textmode();
 void set_fg_RGB(RGB color);
 void set_bg_RGB(RGB color);
 void write_at(int x, int y, char *s);
-void write_at_RGB(int x, int y, RGB color, char *s);
 void erase_at(int x, int y, int length);
 
 #endif

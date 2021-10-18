@@ -1,5 +1,6 @@
 #include "terminal.h"
 
+/* Private function. Used inside HSLtoRGB conversion. */
 double _hue_to_rgb(double p, double q, double t)
 {
   if (t < 0)
@@ -17,6 +18,7 @@ double _hue_to_rgb(double p, double q, double t)
   return p;
 }
 
+/* Private function. Returns the maximum value between two. */
 double _max(double a, double b)
 {
   if (a > b)
@@ -24,6 +26,7 @@ double _max(double a, double b)
   return b;
 }
 
+/* Private function. Returns the minimum value between two. */
 double _min(double a, double b)
 {
   if (a < b)
@@ -31,26 +34,33 @@ double _min(double a, double b)
   return b;
 }
 
+/* Private function. Returns the maximum value between tree. */
 double _max_3(double a, double b, double c)
 {
   return _max(_max(a, b), c);
 }
 
+/* Private function. Returns the minimum value between tree. */
 double _min_3(double a, double b, double c)
 {
   return _min(_min(a, b), c);
 }
 
+/* Creates a RGB struct containing the three channels.
+R, G, and B are in range 0-255. */
 RGB createRGBcolor(int R, int G, int B)
 {
   return (RGB){.R = R, .G = G, .B = B};
 }
 
+/* Creates a HSL struct containing the three channels. 
+H is in range 0-359, S and L are in range 0-100. */
 HSL createHSLcolor(int H, int S, int L)
 {
   return (HSL){.H = H, .S = S, .L = L};
 }
 
+/* Converts a HSL color into the RGB space. */
 RGB HSLtoRGB(HSL color)
 {
   double h, s, l;
@@ -79,6 +89,7 @@ RGB HSLtoRGB(HSL color)
   return createRGBcolor(r * 255, g * 255, b * 255);
 }
 
+/* Converts a RGB color into the HSL space. */
 HSL RGBtoHSL(RGB color)
 {
   double r, g, b;
@@ -115,6 +126,8 @@ HSL RGBtoHSL(RGB color)
   return createHSLcolor(h * 60, s * 100, l * 100);
 }
 
+/* Converts a color provided the hue into the RGB space. 
+Saturation and value are assumed to be respectively 100 and 50 */
 RGB HUEtoRGB(double hue)
 {
   HSL color = createHSLcolor(hue, 100, 50);
@@ -129,6 +142,7 @@ Rectangle createRectangle(int w, int h)
   return (Rectangle){.w = w, .h = h};
 }
 
+/* Clears the terminal and moves the cursor to the top left corner. */
 void clear_terminal()
 {
   printf(MOVEHOME);
@@ -137,6 +151,8 @@ void clear_terminal()
   return;
 };
 
+/* Hides the blinking cursor from the terminal, disabling also echo.
+Call show_cursor() to make it visible again. */
 void hide_cursor()
 {
   // turn off echo
@@ -150,6 +166,7 @@ void hide_cursor()
   return;
 }
 
+/* Makes echo and terminals visible again. */
 void show_cursor()
 {
   // turn on echo
@@ -163,6 +180,7 @@ void show_cursor()
   return;
 }
 
+/* Returns the current size of the terminal. If it's not available, returns -1. */
 Rectangle get_terminal_size()
 {
   struct winsize size;
@@ -176,12 +194,14 @@ Rectangle get_terminal_size()
   return createRectangle(-1, -1);
 };
 
+/* Moves cursor to x, y coordinates (zero-indexed). */
 void move_cursor_to(int x, int y)
 {
   printf(ESCAPE "[%i;%iH", y + 1, x + 1);
   return;
 };
 
+/* Resets all the previously set text styles (foreground color, background color and text modes). */
 void reset_styles()
 {
   reset_fg();
@@ -190,6 +210,7 @@ void reset_styles()
   return;
 }
 
+/* Set styles for the text. Accepts a variable number of parameters. */
 void set_styles(style styles, ...)
 {
   va_list v;
@@ -201,59 +222,61 @@ void set_styles(style styles, ...)
   return;
 }
 
+/* Sets the foreground color of the text. */
 void set_fg(style color)
 {
   printf(ESCAPE "[%im", color);
   return;
 }
 
+/* Sets the background color of the text. */
 void set_bg(style color)
 {
   printf(ESCAPE "[%im", color);
   return;
 }
 
+/* Sets the text mode. */
 void set_textmode(style mode)
 {
   printf(ESCAPE "[%im", mode);
 }
 
+/* Resets the foreground color of the text. */
 void reset_fg()
 {
   set_fg(fg_DEFAULT);
   return;
 }
 
+/* Resets the background color of the text. */
 void reset_bg()
 {
   set_bg(bg_DEFAULT);
   return;
 }
 
+/* Resets the text mode. */
 void reset_textmode()
 {
   set_textmode(TEXT_RESET);
 }
 
+/* Sets the foreground color of the text, according to the RGB values. */
 void set_fg_RGB(RGB color)
 {
   printf(ESCAPE "[38;2;%i;%i;%im", color.R, color.G, color.B);
   return;
 }
 
+/* Sets the background color of the text, according to the RGB values. */
 void set_bg_RGB(RGB color)
 {
   printf(ESCAPE "[34;2;%i;%i;%im", color.R, color.G, color.B);
   return;
 }
 
-void write_at_RGB(int x, int y, RGB color, char *s)
-{
-  move_cursor_to(x, y);
-  printf(ESCAPE "[38;2;%i;%i;%im%s", color.R, color.G, color.B, s);
-  return;
-};
-
+/* Writes a string at certain x,y coordinates (zero-indexed). */
 void write_at(int x, int y, char *s)
 {
   move_cursor_to(x, y);
@@ -261,6 +284,7 @@ void write_at(int x, int y, char *s)
   return;
 };
 
+/* Erases a set number of characters at certain x,y coordinates (zero-indexed). */
 void erase_at(int x, int y, int length)
 {
   for (int i = 0; i < length; i++)
