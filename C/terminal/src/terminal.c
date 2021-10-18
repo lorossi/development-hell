@@ -115,6 +115,12 @@ HSL RGBtoHSL(RGB color)
   return createHSLcolor(h * 60, s * 100, l * 100);
 }
 
+RGB HUEtoRGB(double hue)
+{
+  HSL color = createHSLcolor(hue, 255, 127);
+  return HSLtoRGB(color);
+}
+
 Rectangle createRectangle(int w, int h)
 {
   if (w < 0 || h < 0)

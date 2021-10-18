@@ -87,6 +87,7 @@ HSL createHSLcolor(int H, int S, int L);
 
 // colors manipulation
 RGB HSLtoRGB(HSL color);
+RGB HUEtoRGB(double hue);
 HSL RGBtoHSL(RGB color);
 
 // terminal manipulation
