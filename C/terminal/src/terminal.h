@@ -6,6 +6,7 @@
 #include <unistd.h>    // for STDOUT_FILENO
 #include <termios.h>   // for cl_flag
 #include <stdarg.h>    // for multiple parameters
+#include <string.h>    // for strcpy()
 
 typedef int style;
 
@@ -65,6 +66,8 @@ static const style TEXT_RESET = 0;
 #define SHOWCURSOR ESCAPE "[?25h"
 #define BELL "\a"
 
+#define MAX_LINES 50
+
 typedef struct
 {
   int w, h;
@@ -94,18 +97,19 @@ typedef struct
   int auto_size;
   int lines;
   int padding;
-  int visible;
-  int align;
-  char content[50][50];
+  int alignment;
+  style text_color;
+  char content[MAX_LINES][50];
   Rectangle size;
   Position pos;
 } Window;
 
 // struct creation
 Rectangle createRectangle(int w, int h);
+Position createPosition(int x, int y);
 RGB createRGBcolor(int R, int G, int B);
 HSL createHSLcolor(int H, int S, int L);
-Window crateWindow(
+Window createWindow(int x, int y);
 
 // colors manipulation
 RGB HSLtoRGB(HSL color);
@@ -135,5 +139,19 @@ void set_fg_HSL(HSL color);
 void set_bg_HSL(HSL color);
 void write_at(int x, int y, char *s);
 void erase_at(int x, int y, int length);
+
+// window manipulation
+void windowSetSize(Window *w, int width, int height);
+Rectangle windowGetSize(Window *w);
+void windowSetPosition(Window *w, int x, int y);
+Position windowGetPosition(Window *w);
+void windowSetPadding(Window *w, int padding);
+void windowSetAlignment(Window *w, int alignment);
+void windowSetAutoSize(Window *w, int auto_size);
+int windowGetLines(Window *w);
+int windowAddLine(Window *w, char *line);
+int windowChangeLine(Window *w, char *line, int line_count);
+int windowDeleteLine(Window *w, int line_count);
+void showWindow(Window *w);
 
 #endif

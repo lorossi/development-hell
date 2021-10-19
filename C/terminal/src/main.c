@@ -3,6 +3,48 @@
 #include <stdlib.h> // for random values
 #include <stdio.h>  // for I/O operations
 
+void test_windows()
+{
+  reset_styles();
+  clear_terminal();
+
+  Window w_left = createWindow(1, 1);
+  windowSetPadding(&w_left, 1);
+  windowAddLine(&w_left, "LEFT");
+  windowAddLine(&w_left, "");
+  windowAddLine(&w_left, "TEXT");
+  showWindow(&w_left);
+
+  Window w_center = createWindow(20, 1);
+  windowSetAlignment(&w_center, 0);
+  windowSetPadding(&w_center, 2);
+  windowAddLine(&w_center, "CENTER");
+  windowAddLine(&w_center, "");
+  windowAddLine(&w_center, "TEXT");
+  showWindow(&w_center);
+
+  Window w_right = createWindow(40, 1);
+  windowSetPadding(&w_right, 1);
+  windowSetAlignment(&w_right, 1);
+  windowAddLine(&w_right, "RIGHT");
+  windowAddLine(&w_right, "");
+  windowAddLine(&w_right, "TEXT");
+  showWindow(&w_right);
+
+  Window w_wide = createWindow(10, 10);
+  windowAddLine(&w_wide, "VERY VERY VERY VERY VERY LONG WINDOW");
+  windowAddLine(&w_wide, "AND");
+  windowAddLine(&w_wide, "TEXT INSIDE");
+  windowSetAlignment(&w_wide, 0);
+  windowSetSize(&w_wide, 50, 3);
+  windowSetAlignment(&w_wide, 0);
+  showWindow(&w_wide);
+
+  move_cursor_to_bottom();
+  reset_styles();
+  return;
+}
+
 void test_colors()
 {
   reset_styles();
@@ -411,34 +453,43 @@ void starry_night()
 
 int main()
 {
+  enter_raw_mode();
+  hide_cursor();
+
+  test_windows();
+  printf("\nPress a button to continue");
+  getchar();
+
   test_colors();
-  printf("Press enter to continue");
+  printf("\nPress a button to continue");
   getchar();
 
   test_textmodes();
-  printf("Press enter to continue");
+  printf("\nPress a button to continue");
   getchar();
 
   test_mixed();
-  printf("Press enter to continue\n");
+  printf("\nPress a button to continue");
   getchar();
 
   test_RGB();
-  printf("Press enter to continue\n");
+  printf("\nPress a button to continue");
   getchar();
 
   test_HSL();
-  printf("Press enter to continue\n");
+  printf("\nPress a button to continue");
   getchar();
 
   test_hue();
-  printf("Press enter to continue\n");
+  printf("\nPress a button to continue");
   getchar();
 
   starry_night();
-  printf("Press enter to continue\n");
+  printf("\nPress a button to continue");
   getchar();
 
+  show_cursor();
+  leave_raw_move();
   clear_terminal();
   return 0;
 }
