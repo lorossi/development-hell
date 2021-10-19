@@ -54,7 +54,9 @@ int _windowCalculateLongestLine(Window *w)
   for (int i = 0; i < w->lines; i++)
   {
     if (strlen(w->content[i]) > longest)
+    {
       longest = strlen(w->content[i]);
+    }
   }
 
   return longest;
@@ -117,16 +119,16 @@ void _windowDrawBorder(Window *w)
 }
 
 /* Private function. Calculate line spacing. */
-int _windowCalculateSpacing(Window *w, int longest, int current_line)
+int _windowCalculateSpacing(Window *w, int current_len)
 {
   if (w->alignment == -1)
     return 0;
 
   else if (w->alignment == 0)
-    return (w->size.w - w->padding * 2 - 2 - strlen(w->content[current_line])) / 2;
+    return (w->size.w - w->padding * 2 - 2 - current_len) / 2;
 
   else if (w->alignment == 1)
-    return w->size.w - w->padding * 2 - 2 - strlen(w->content[current_line]);
+    return w->size.w - w->padding * 2 - 2 - current_len;
 
   return 0;
 }
@@ -175,7 +177,8 @@ Window *createWindow(int x, int y)
       .alignment = -1,
       .lines = 0,
       .auto_size = 1,
-      .text_color = fg_WHITE,
+      .fg_color = fg_DEFAULT,
+      .bg_color = bg_DEFAULT,
   };
 
   return new;
@@ -466,7 +469,8 @@ void erase_at(int x, int y, int length)
 void await_keypress(char *s)
 {
   enter_raw_mode();
-  printf("%s", s);
+  if (s != NULL)
+    printf("%s", s);
   getchar();
   exit_raw_move();
 
@@ -476,7 +480,8 @@ void await_keypress(char *s)
 /* Awaits a enter keypress. A message is prompted on the terminal. */
 void await_enter(char *s)
 {
-  printf("%s", s);
+  if (s != NULL)
+    printf("%s", s);
   getchar();
 
   return;
@@ -488,8 +493,11 @@ void windowSetSize(Window *w, int width, int height)
   if (width < 0 || height < 0)
     return;
 
-  w->size = createRectangle(width, height);
-  w->auto_size = 0; // disable auto size
+  if (width != w->size.w || height != w->size.h)
+  {
+    windowClear(w);
+    w->size = createRectangle(width, height);
+  }
 
   return;
 }
@@ -513,6 +521,15 @@ Position windowGetPosition(Window *w)
   return w->pos;
 }
 
+/* Gets the position of the bottom right corner of the window */
+Position windowGetBottomRight(Window *w)
+{
+  return (Position){
+      .x = w->pos.x + w->size.w,
+      .y = w->pos.y + w->size.h,
+  };
+}
+
 /* Sets windows padding. */
 void windowSetPadding(Window *w, int padding)
 {
@@ -528,6 +545,37 @@ void windowSetAlignment(Window *w, int alignment)
   if (-1 <= alignment && alignment <= 1)
     w->alignment = alignment;
 
+  return;
+}
+
+/* Sets window auto resize. Values: 1 for automatic resizing, 0 for manual sizing. */
+void windowSetAutoSize(Window *w, int auto_size)
+{
+  if (auto_size != 0 && auto_size != 1)
+    return;
+
+  w->auto_size = auto_size;
+}
+
+/* Manually trigger window resize. */
+void windowAutoResize(Window *w)
+{
+  int longest;
+  longest = _windowCalculateLongestLine(w);
+  _windowAutoResize(w, longest);
+}
+
+/* Sets window text color. */
+void windowSetFGcolor(Window *w, style fg_color)
+{
+  w->fg_color = fg_color;
+  return;
+}
+
+/* Sets window background color. */
+void windowSetBGcolor(Window *w, style bg_color)
+{
+  w->bg_color = bg_color;
   return;
 }
 
@@ -563,34 +611,51 @@ int windowChangeLine(Window *w, char *line, int line_count)
 /* Deletes a line of text in the window. Returns -1 in case of error, otherwise returns the number of lines. */
 int windowDeleteLine(Window *w, int line_count)
 {
-  if (line_count > w->lines)
+  if (line_count >= w->lines)
     return -1;
 
   w->lines--;
 
   for (int i = line_count; i < w->lines; i++)
-    strcpy(w->content[i - 1], w->content[i]);
+    strcpy(w->content[i], w->content[i + 1]);
 
   return w->lines;
 }
 
-/* Shows a window on the terminal. */
-void showWindow(Window *w)
+/* Deletes a all the lines of text in the window. Returns -1 in case of error. */
+int windowDeleteAllLines(Window *w)
 {
+  w->lines = 0;
+
+  return 0;
+}
+
+/* Shows a window on the terminal. */
+void windowShow(Window *w)
+{
+  // no text, return
+  if (w->lines == 0)
+    return;
+
   // calculate longeast line
   int longest = _windowCalculateLongestLine(w);
-
   // auto resize window
   if (w->auto_size)
     _windowAutoResize(w, longest);
+
+  // set styles
+  set_fg(w->fg_color);
+  set_bg(w->bg_color);
+
   // draw outer border
   _windowDrawBorder(w);
 
-  set_fg(w->text_color);
   for (int i = 0; i < w->lines; i++)
   {
+    // calculate line length
+    const int ll = strlen(w->content[i]);
     // calculate spacing according to alignment
-    int spacing = _windowCalculateSpacing(w, longest, i);
+    int spacing = _windowCalculateSpacing(w, ll);
     // calculate line coordinates
     const int lx = w->pos.x + w->padding + spacing + 1;
     const int ly = w->pos.y + 1 + i;
@@ -599,10 +664,12 @@ void showWindow(Window *w)
     printf("%s", w->content[i]);
   }
   reset_fg();
+
+  move_cursor_to(0, 0);
 }
 
 /* Clears a window from the terminal */
-void clearWindow(Window *w)
+void windowClear(Window *w)
 {
   reset_bg();
   for (int y = 0; y < w->size.h; y++)

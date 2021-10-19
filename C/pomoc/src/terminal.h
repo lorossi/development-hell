@@ -6,6 +6,8 @@
 #include <unistd.h>    // for STDOUT_FILENO
 #include <termios.h>   // for cl_flag
 #include <stdarg.h>    // for multiple parameters
+#include <string.h>    // for strcpy()
+#include <stdlib.h>    // for malloc() and free()
 
 typedef int style;
 
@@ -65,10 +67,17 @@ static const style TEXT_RESET = 0;
 #define SHOWCURSOR ESCAPE "[?25h"
 #define BELL "\a"
 
+#define MAX_LINES 50
+
 typedef struct
 {
   int w, h;
 } Rectangle;
+
+typedef struct
+{
+  int x, y;
+} Position;
 
 typedef struct
 {
@@ -84,8 +93,22 @@ typedef struct
   int L; // range [0-100]
 } HSL;
 
+typedef struct
+{
+  int auto_size;
+  int lines;
+  int padding;
+  int alignment;
+  style fg_color;
+  style bg_color;
+  char content[MAX_LINES][50];
+  Rectangle size;
+  Position pos;
+} Window;
+
 // struct creation
 Rectangle createRectangle(int w, int h);
+Position createPosition(int x, int y);
 RGB createRGBcolor(int R, int G, int B);
 HSL createHSLcolor(int H, int S, int L);
 
@@ -101,6 +124,8 @@ void hide_cursor();
 void show_cursor();
 void move_cursor_to_bottom();
 void move_cursor_to(int x, int y);
+void enter_raw_mode();
+void exit_raw_move();
 void set_styles(style styles, ...);
 void reset_styles();
 void set_fg(style color);
@@ -115,5 +140,29 @@ void set_fg_HSL(HSL color);
 void set_bg_HSL(HSL color);
 void write_at(int x, int y, char *s);
 void erase_at(int x, int y, int length);
+void await_keypress(char *s);
+void await_enter(char *s);
+
+// window manipulation
+Window *createWindow(int x, int y);
+void deleteWindow(Window *w);
+void windowSetSize(Window *w, int width, int height);
+Rectangle windowGetSize(Window *w);
+void windowSetPosition(Window *w, int x, int y);
+Position windowGetPosition(Window *w);
+Position windowGetBottomRight(Window *w);
+void windowSetPadding(Window *w, int padding);
+void windowSetAlignment(Window *w, int alignment);
+void windowSetAutoSize(Window *w, int auto_size);
+void windowAutoResize(Window *w);
+void windowSetFGcolor(Window *w, style fg_color);
+void windowSetBGcolor(Window *w, style bg_color);
+int windowGetLines(Window *w);
+int windowAddLine(Window *w, char *line);
+int windowChangeLine(Window *w, char *line, int line_count);
+int windowDeleteLine(Window *w, int line_count);
+int windowDeleteAllLines(Window *w);
+void windowShow(Window *w);
+void windowClear(Window *w);
 
 #endif

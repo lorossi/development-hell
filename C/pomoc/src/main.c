@@ -1,4 +1,4 @@
-#define _DEFAULT_SOURCE // for usleep
+#define _DEFAULT_SOURCE // for nanosleep
 
 #include <stdio.h>
 #include <time.h>
@@ -6,6 +6,7 @@
 #include <unistd.h>  // for nanosleep()
 #include <pthread.h> // for multithread
 #include <string.h>  // for strlen()
+#include <stdlib.h>  // for malloc() and free()
 
 #include "terminal.h"
 
@@ -15,29 +16,38 @@ typedef struct phase
   int duration;
   int repetitions;
   int completed;
+  int is_study;
   clock_t started;
-  style text_color;
+  style fg_color;
+  style bg_color;
   struct phase *next;
   struct phase *next_after;
 } Phase;
+
+typedef struct
+{
+  Phase *current_phase;
+  Window *w_phase, *w_total;
+  int study_phases;
+} Parameters;
 
 const int STUDYDURATION = 45;
 const int SHORTBREAKDURATION = 5;
 const int LONGBREAKDURATION = 20;
 const int STUDYSESSIONS = 4;
 const int BORDER = 1;
-const int WINDOWSPACING = 1;
+const int PADDING = 2;
 
-Phase phases[3];
-Phase *current_phase;
 volatile int loop;
 
 void SIGINT_handler()
 {
+  // stop loop
   loop = 0;
   return;
 }
 
+/* Sleep a set amount of ms */
 void msec_sleep(int msec)
 {
   if (msec < 0)
@@ -50,153 +60,188 @@ void msec_sleep(int msec)
 }
 
 /* Assign all the variables needed to run the timer */
-void init_pomodoro()
+void init_pomodoro(Phase phases[3])
 {
   // create array of phases
   phases[0] = (Phase){
-      .name = "Study",
+      .name = "study",
       .duration = STUDYDURATION,
       .repetitions = STUDYSESSIONS,
       .completed = 0,
       .started = 0,
-      .next = &phases[1],
-      .next_after = &phases[2],
-      .text_color = fg_RED,
+      .is_study = 1,
+      .next = phases + 1,
+      .next_after = phases + 2,
+      .fg_color = fg_RED,
+      .bg_color = bg_DEFAULT,
   };
 
   phases[1] = (Phase){
-      .name = "Short break",
+      .name = "short break",
       .duration = SHORTBREAKDURATION,
       .repetitions = 0,
       .completed = 0,
       .started = 0,
-      .next = &phases[0],
-      .text_color = fg_GREEN,
+      .is_study = 0,
+      .next = phases,
+      .fg_color = fg_GREEN,
+      .bg_color = bg_DEFAULT,
   };
 
   phases[2] = (Phase){
-      .name = "Long break",
+      .name = "long break",
       .duration = LONGBREAKDURATION,
       .repetitions = 0,
       .completed = 0,
       .started = 0,
-      .next = &phases[0],
-      .text_color = fg_GREEN,
+      .is_study = 0,
+      .next = phases,
+      .fg_color = fg_GREEN,
+      .bg_color = bg_DEFAULT,
   };
+}
 
+/* Set initial phase */
+Phase *set_initial_phase(Phase phases[3])
+{
+  Phase *current_phase;
   // set current phase
-  current_phase = &phases[0];
+  current_phase = phases;
+  // reset current phase time
   current_phase->started = time(NULL);
+  return current_phase;
 }
 
 void format_time(int elapsed, char *buffer)
 {
-  int seconds, minutes;
+  int seconds, minutes, hours;
 
   seconds = elapsed % 60;
   minutes = (elapsed - seconds * 60) % 60;
+  hours = 0;
   if (minutes < 0)
+  {
     minutes = 0;
+  }
+  else if (minutes > 60)
+  {
+    hours = minutes / 60;
+    minutes %= 60;
+  }
 
-  sprintf(buffer, "%02d:%02d", minutes, seconds);
+  if (hours > 0)
+  {
+    sprintf(buffer, "%02d:%02d:%02d", hours, minutes, seconds);
+  }
+  else
+  {
+    sprintf(buffer, "%02d:%02d", minutes, seconds);
+  }
   return;
 }
 
-void *show_routine()
+/* Routine handling terminal output */
+void *show_routine(void *args)
 {
+  Parameters *p = args;
   while (loop)
   {
-    int elapsed, longest;
-    char elapsed_formatted[20];
-    char lines[3][50];
+    int elapsed;
+    char buffer[50];
+    char num_buffer[20];
 
-    elapsed = time(NULL) - current_phase->started;
-    format_time(elapsed, elapsed_formatted);
+    // remove old lines
+    windowDeleteAllLines(p->w_phase);
+    windowDeleteAllLines(p->w_total);
+    // update w_phase color
+    windowSetFGcolor(p->w_phase, p->current_phase->fg_color);
+    windowSetBGcolor(p->w_phase, p->current_phase->bg_color);
 
-    if (current_phase->repetitions > 0)
-      sprintf(lines[0], "current phase: %s [%i/%i]", current_phase->name, current_phase->completed + 1, current_phase->repetitions);
+    // first line of phase window
+    if (p->current_phase->repetitions > 0)
+      sprintf(buffer, "current phase: %s [%i/%i]", p->current_phase->name, p->current_phase->completed + 1, p->current_phase->repetitions);
     else
-      sprintf(lines[0], "current phase: %s", current_phase->name);
+      sprintf(buffer, "current phase: %s", p->current_phase->name);
+    windowAddLine(p->w_phase, buffer);
 
-    sprintf(lines[1], "phase duration: %i minutes", current_phase->duration);
-    sprintf(lines[2], "elapsed time: %s", elapsed_formatted);
+    // second line of phase window
+    sprintf(buffer, "phase duration: %i minutes", p->current_phase->duration);
+    windowAddLine(p->w_phase, buffer);
 
-    longest = 0;
-    for (int i = 0; i < 3; i++)
-    {
-      if (strlen(lines[i]) > longest)
-      {
-        longest = strlen(lines[i]) + WINDOWSPACING * 2;
-      }
-    }
-    if (longest % 2 == 1)
-    {
-      longest++;
-    }
+    // format time
+    elapsed = time(NULL) - p->current_phase->started;
+    format_time(elapsed, num_buffer);
+    // third line of phase window
+    sprintf(buffer, "elapsed time: %s", num_buffer);
+    windowAddLine(p->w_phase, buffer);
 
-    for (int x = 0; x < longest + 2; x++)
-    {
-      for (int y = 0; y < 5; y++)
-      {
-        if (x == 0 || x == longest + 1)
-        {
-          move_cursor_to(BORDER + x, BORDER + y);
-          if (y == 0 && x == 0)
-            printf("\u250C"); // top left
-          else if (y == 0 && x == longest + 1)
-            printf("\u2510"); // top right
-          else if (y == 4 && x == 0)
-            printf("\u2514"); // bottom left
-          else if (y == 4 && x == longest + 1)
-            printf("\u2518"); // bottom right
-          else
-            printf("\u2502");
-        }
-        else if (y == 0 || y == 4)
-        {
-          move_cursor_to(BORDER + x, BORDER + y);
-          printf("\u2500");
-        }
-      }
-    }
+    // first line of w_total
+    sprintf(buffer, "total study sessions: %i", p->study_phases);
+    windowAddLine(p->w_total, buffer);
 
-    for (int i = 0; i < 3; i++)
-    {
-      int spacing;
-      spacing = (double)(longest - strlen(lines[i])) / 2;
-      set_fg(current_phase->text_color);
-      move_cursor_to(spacing + BORDER + WINDOWSPACING, i + BORDER + WINDOWSPACING);
-      printf("%s", lines[i]);
-    }
+    // second line of w_total
+    int total_studied = p->study_phases * STUDYDURATION;
+    // add current session to total time if it's a study session
+    if (p->current_phase->is_study)
+      total_studied += elapsed;
 
-    msec_sleep(100);
+    format_time(total_studied, num_buffer);
+    sprintf(buffer, "total time studied: %s", num_buffer);
+    windowAddLine(p->w_total, buffer);
+
+    // set position of w_total
+    windowAutoResize(p->w_phase); // trigger resize to get the actual width
+    Position br_corner = windowGetBottomRight(p->w_phase);
+    windowSetPosition(p->w_total, br_corner.x + 1, BORDER);
+
+    // show windows
+    windowShow(p->w_phase);
+    windowShow(p->w_total);
+
+    // idle
+    msec_sleep(50);
   }
   pthread_exit(0);
 }
 
-void *advance_routine()
+/* Routine handling time */
+void *advance_routine(void *args)
 {
+  Parameters *p = args;
   while (loop)
   {
     int elapsed_min;
-    elapsed_min = (time(NULL) - current_phase->started) / 60;
-    if (elapsed_min > current_phase->duration)
+    // calculate minutes elapsed
+    elapsed_min = (time(NULL) - p->current_phase->started) / 60;
+    if (elapsed_min > p->current_phase->duration)
     {
-      current_phase->completed++;
-      if (current_phase->completed >= current_phase->repetitions && current_phase->repetitions > 0)
+      // one phase has been completed
+      p->current_phase->completed++;
+      // shall the phase count toward the maximum?
+      if (p->current_phase->is_study)
       {
-        current_phase->completed = 0;
-        current_phase = current_phase->next_after;
+        // yes
+        p->study_phases++;
+      }
+
+      // check if this phase must be repeated
+      if (p->current_phase->completed >= p->current_phase->repetitions && p->current_phase->repetitions > 0)
+      {
+        // repetitions have ended
+        p->current_phase->completed = 0;
+        p->current_phase = p->current_phase->next_after;
       }
       else
       {
-        current_phase = current_phase->next;
+        // no repetitions or repetitions already finished
+        p->current_phase = p->current_phase->next;
       }
 
-      // erase window
-      // TODO make it better
-      clear_terminal();
-      current_phase->started = time(NULL);
+      // erase windows
+      windowClear(p->w_phase);
+      windowClear(p->w_total);
+
+      p->current_phase->started = time(NULL);
     }
 
     msec_sleep(100);
@@ -206,22 +251,53 @@ void *advance_routine()
 
 int main()
 {
+  // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
   pthread_t show_thread, advance_thread;
+  int show_return, advance_return;
+  Phase phases[3], *current_phase;
+  Parameters *p;
+  Window *w_phase, *w_total;
 
-  init_pomodoro();
+  init_pomodoro(phases);
+  current_phase = set_initial_phase(phases);
+
+  // w_phase keeping track of current phase
+  w_phase = createWindow(BORDER, BORDER);
+  windowSetAlignment(w_phase, 0);
+  windowSetPadding(w_phase, PADDING);
+  // w_phase keeping track of total time
+  w_total = createWindow(0, 0);
+  windowSetAlignment(w_total, 0);
+  windowSetPadding(w_total, PADDING);
+  windowSetFGcolor(w_total, fg_YELLOW);
+
+  // pack the parameters
+  p = malloc(sizeof(Parameters));
+  p->current_phase = current_phase;
+  p->study_phases = 0;
+  p->w_phase = w_phase;
+  p->w_total = w_total;
+
+  //.start the loop
   loop = 1;
 
+  // prepare terminal
   clear_terminal();
   hide_cursor();
+  // spawn threads
+  show_return = pthread_create(&show_thread, NULL, show_routine, (void *)p);
+  advance_return = pthread_create(&advance_thread, NULL, advance_routine, (void *)p);
 
-  pthread_create(&show_thread, NULL, show_routine, NULL);
-  pthread_create(&advance_thread, NULL, advance_routine, NULL);
-
-  while (loop)
+  // IDLE
+  while (loop || show_return != 0 || advance_return != 0)
   {
+    msec_sleep(25);
   }
 
+  // clean up
+  free(p);
+  // reset all terminal
   reset_styles();
   clear_terminal();
   show_cursor();

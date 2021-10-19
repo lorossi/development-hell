@@ -99,7 +99,8 @@ typedef struct
   int lines;
   int padding;
   int alignment;
-  style text_color;
+  style fg_color;
+  style bg_color;
   char content[MAX_LINES][50];
   Rectangle size;
   Position pos;
@@ -149,14 +150,19 @@ void windowSetSize(Window *w, int width, int height);
 Rectangle windowGetSize(Window *w);
 void windowSetPosition(Window *w, int x, int y);
 Position windowGetPosition(Window *w);
+Position windowGetBottomRight(Window *w);
 void windowSetPadding(Window *w, int padding);
 void windowSetAlignment(Window *w, int alignment);
 void windowSetAutoSize(Window *w, int auto_size);
+void windowAutoResize(Window *w);
+void windowSetFGcolor(Window *w, style fg_color);
+void windowSetBGcolor(Window *w, style bg_color);
 int windowGetLines(Window *w);
 int windowAddLine(Window *w, char *line);
 int windowChangeLine(Window *w, char *line, int line_count);
 int windowDeleteLine(Window *w, int line_count);
-void showWindow(Window *w);
-void clearWindow(Window *w);
+int windowDeleteAllLines(Window *w);
+void windowShow(Window *w);
+void windowClear(Window *w);
 
 #endif
