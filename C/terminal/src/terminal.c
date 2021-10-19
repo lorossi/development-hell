@@ -318,7 +318,7 @@ void erase_at(int x, int y, int length)
 {
   for (int i = 0; i < length; i++)
   {
-    move_cursor_to(x, y);
+    move_cursor_to(x + i, y);
     printf(" ");
   }
   return;

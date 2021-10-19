@@ -1,4 +1,7 @@
 #include "terminal.h"
+#include <time.h>   // for random init
+#include <stdlib.h> // for random values
+#include <stdio.h>  // for I/O operations
 
 void test_colors()
 {
@@ -379,8 +382,36 @@ void test_hue()
   reset_styles();
 }
 
+void starry_night()
+{
+  RGB sky_color = createRGBcolor(25, 25, 112);
+  RGB star_color = createRGBcolor(255, 205, 60);
+  Rectangle size = get_terminal_size();
+
+  reset_styles();
+  set_bg_RGB(sky_color);
+  set_fg_RGB(star_color);
+  set_textmode(BOLD);
+  set_textmode(BLINKING);
+
+  clear_terminal();
+
+  srand(time(NULL));
+  for (int i = 0; i < 25; i++)
+  {
+    int x = rand() % size.w;
+    int y = rand() % size.h;
+    move_cursor_to(x, y);
+    printf("*");
+  }
+
+  move_cursor_to_bottom();
+  reset_styles();
+}
+
 int main()
 {
+  /*
   test_colors();
   printf("Press enter to continue");
   getchar();
@@ -402,6 +433,11 @@ int main()
   getchar();
 
   test_hue();
+  printf("Press enter to continue\n");
+  getchar();
+  */
+
+  starry_night();
   printf("Press enter to continue\n");
   getchar();
 
