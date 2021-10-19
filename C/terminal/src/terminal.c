@@ -179,6 +179,24 @@ void show_cursor()
   return;
 }
 
+/* Enters terminal raw mode. */
+void enter_raw_mode()
+{
+  struct termios raw;
+  tcgetattr(STDIN_FILENO, &raw);
+  raw.c_lflag &= (~(ICANON | ECHO));
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+/* Leaves terminal raw mode. */
+void leave_raw_move()
+{
+  struct termios raw;
+  tcgetattr(STDIN_FILENO, &raw);
+  raw.c_lflag |= ((ICANON | ECHO));
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
 /* Moves the cursor to the bottom of the screen. */
 void move_cursor_to_bottom()
 {

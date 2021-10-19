@@ -72,6 +72,11 @@ typedef struct
 
 typedef struct
 {
+  int x, y;
+} Position;
+
+typedef struct
+{
   int R; // range [0-255]
   int G; // range [0-255]
   int B; // range [0-255]
@@ -84,10 +89,23 @@ typedef struct
   int L; // range [0-100]
 } HSL;
 
+typedef struct
+{
+  int auto_size;
+  int lines;
+  int padding;
+  int visible;
+  int align;
+  char content[50][50];
+  Rectangle size;
+  Position pos;
+} Window;
+
 // struct creation
 Rectangle createRectangle(int w, int h);
 RGB createRGBcolor(int R, int G, int B);
 HSL createHSLcolor(int H, int S, int L);
+Window crateWindow(
 
 // colors manipulation
 RGB HSLtoRGB(HSL color);
@@ -101,6 +119,8 @@ void hide_cursor();
 void show_cursor();
 void move_cursor_to_bottom();
 void move_cursor_to(int x, int y);
+void enter_raw_mode();
+void leave_raw_move();
 void set_styles(style styles, ...);
 void reset_styles();
 void set_fg(style color);
