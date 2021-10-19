@@ -116,18 +116,9 @@ void format_time(int elapsed, char *buffer)
 {
   int seconds, minutes, hours;
 
+  hours = elapsed / 3600;
+  minutes = (elapsed % 3600) / 60;
   seconds = elapsed % 60;
-  minutes = (elapsed - seconds * 60) % 60;
-  hours = 0;
-  if (minutes < 0)
-  {
-    minutes = 0;
-  }
-  else if (minutes > 60)
-  {
-    hours = minutes / 60;
-    minutes %= 60;
-  }
 
   if (hours > 0)
   {
