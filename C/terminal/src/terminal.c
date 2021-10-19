@@ -145,7 +145,7 @@ HSL createHSLcolor(int H, int S, int L)
   return (HSL){.H = H, .S = S, .L = L};
 }
 
-/* Creates a rectangle of set width and height */
+/* Creates a rectangle of set width and height. */
 Rectangle createRectangle(int w, int h)
 {
   if (w < 0 || h < 0)
@@ -154,19 +154,21 @@ Rectangle createRectangle(int w, int h)
   return (Rectangle){.w = w, .h = h};
 }
 
-/* Creates a position struct  */
+/* Creates a position struct. */
 Position createPosition(int x, int y)
 {
   return (Position){.x = x, .y = y};
 }
 
-/* Create a Window with set position */
-Window createWindow(int x, int y)
+/* Creates a Window with set position. */
+Window *createWindow(int x, int y)
 {
   Position pos = createPosition(x, y);
   Rectangle size = createRectangle(1, 1);
 
-  Window new = (Window){
+  Window *new = malloc(sizeof(Window));
+
+  *new = (Window){
       .pos = pos,
       .padding = 1,
       .size = size,
@@ -177,6 +179,13 @@ Window createWindow(int x, int y)
   };
 
   return new;
+}
+
+/* Deletes a Window. */
+void deleteWindow(Window *w)
+{
+  free(w);
+  return;
 }
 
 /* Converts a HSL color into the RGB space. */
@@ -300,7 +309,7 @@ void enter_raw_mode()
 }
 
 /* Leaves terminal raw mode. */
-void leave_raw_move()
+void exit_raw_move()
 {
   struct termios raw;
   tcgetattr(STDIN_FILENO, &raw);
@@ -453,6 +462,26 @@ void erase_at(int x, int y, int length)
   return;
 }
 
+/* Awaits a keypress. A message is prompted on the terminal. */
+void await_keypress(char *s)
+{
+  enter_raw_mode();
+  printf("%s", s);
+  getchar();
+  exit_raw_move();
+
+  return;
+}
+
+/* Awaits a enter keypress. A message is prompted on the terminal. */
+void await_enter(char *s)
+{
+  printf("%s", s);
+  getchar();
+
+  return;
+}
+
 /* Sets size of a window. Size is relative to the outer border. */
 void windowSetSize(Window *w, int width, int height)
 {
@@ -575,19 +604,7 @@ void showWindow(Window *w)
 /* Clears a window from the terminal */
 void clearWindow(Window *w)
 {
-  const int width = w->size.w;
-  const int height = w->size.h;
-
   reset_bg();
-
-  for (int x = 0; x < width; x++)
-  {
-    for (int y = 0; y < height; y++)
-    {
-      // this is ugly AF, fix it
-      // TODO
-      move_cursor_to(x + w->pos.x, y + w->pos.y - 1);
-      printf(" ");
-    }
-  }
+  for (int y = 0; y < w->size.h; y++)
+    erase_at(w->pos.x, y + w->pos.y - 1, w->size.w);
 }

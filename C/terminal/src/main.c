@@ -8,44 +8,47 @@ void test_windows()
   reset_styles();
   clear_terminal();
 
-  Window w_left = createWindow(1, 1);
-  windowSetPadding(&w_left, 1);
-  windowAddLine(&w_left, "LEFT");
-  windowAddLine(&w_left, "");
-  windowAddLine(&w_left, "TEXT");
-  showWindow(&w_left);
+  Window *w_left = createWindow(1, 1);
+  windowSetPadding(w_left, 1);
+  windowAddLine(w_left, "LEFT");
+  windowAddLine(w_left, "");
+  windowAddLine(w_left, "TEXT");
+  showWindow(w_left);
 
-  Window w_center = createWindow(20, 1);
-  windowSetAlignment(&w_center, 0);
-  windowSetPadding(&w_center, 2);
-  windowAddLine(&w_center, "CENTER");
-  windowAddLine(&w_center, "");
-  windowAddLine(&w_center, "TEXT");
-  showWindow(&w_center);
+  Window *w_center = createWindow(20, 1);
+  windowSetAlignment(w_center, 0);
+  windowSetPadding(w_center, 2);
+  windowAddLine(w_center, "CENTER");
+  windowAddLine(w_center, "");
+  windowAddLine(w_center, "TEXT");
+  showWindow(w_center);
 
-  Window w_right = createWindow(40, 1);
-  windowSetPadding(&w_right, 1);
-  windowSetAlignment(&w_right, 1);
-  windowAddLine(&w_right, "RIGHT");
-  windowAddLine(&w_right, "");
-  windowAddLine(&w_right, "TEXT");
-  showWindow(&w_right);
+  Window *w_right = createWindow(40, 1);
+  windowSetPadding(w_right, 1);
+  windowSetAlignment(w_right, 1);
+  windowAddLine(w_right, "RIGHT");
+  windowAddLine(w_right, "");
+  windowAddLine(w_right, "TEXT");
+  showWindow(w_right);
 
-  Window w_wide = createWindow(10, 10);
-  windowAddLine(&w_wide, "VERY VERY VERY VERY VERY LONG WINDOW");
-  windowAddLine(&w_wide, "AND");
-  windowAddLine(&w_wide, "TEXT INSIDE");
-  windowSetAlignment(&w_wide, 0);
-  windowSetSize(&w_wide, 50, 5);
-  windowSetAlignment(&w_wide, 0);
-  showWindow(&w_wide);
+  Window *w_wide = createWindow(10, 10);
+  windowAddLine(w_wide, "VERY VERY VERY VERY VERY LONG WINDOW");
+  windowAddLine(w_wide, "AND");
+  windowAddLine(w_wide, "TEXT INSIDE");
+  windowSetAlignment(w_wide, 0);
+  windowSetSize(w_wide, 50, 5);
+  windowSetAlignment(w_wide, 0);
+  showWindow(w_wide);
 
   move_cursor_to_bottom();
-  printf("\nPress a button to continue");
-  getchar();
-  clearWindow(&w_wide);
+  await_keypress("\nPress a button to continue");
 
-  reset_styles();
+  clearWindow(w_wide);
+  deleteWindow(w_wide);
+  deleteWindow(w_left);
+  deleteWindow(w_center);
+  deleteWindow(w_right);
+
   return;
 }
 
@@ -461,39 +464,31 @@ int main()
   hide_cursor();
 
   test_windows();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   test_colors();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   test_textmodes();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   test_mixed();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   test_RGB();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   test_HSL();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   test_hue();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   starry_night();
-  printf("\nPress a button to continue");
-  getchar();
+  await_keypress("\nPress a button to continue");
 
   show_cursor();
-  leave_raw_move();
+  exit_raw_move();
   clear_terminal();
   return 0;
 }

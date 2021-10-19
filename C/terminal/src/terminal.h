@@ -7,6 +7,7 @@
 #include <termios.h>   // for cl_flag
 #include <stdarg.h>    // for multiple parameters
 #include <string.h>    // for strcpy()
+#include <stdlib.h>    // for malloc() and free()
 
 typedef int style;
 
@@ -109,7 +110,6 @@ Rectangle createRectangle(int w, int h);
 Position createPosition(int x, int y);
 RGB createRGBcolor(int R, int G, int B);
 HSL createHSLcolor(int H, int S, int L);
-Window createWindow(int x, int y);
 
 // colors manipulation
 RGB HSLtoRGB(HSL color);
@@ -124,7 +124,7 @@ void show_cursor();
 void move_cursor_to_bottom();
 void move_cursor_to(int x, int y);
 void enter_raw_mode();
-void leave_raw_move();
+void exit_raw_move();
 void set_styles(style styles, ...);
 void reset_styles();
 void set_fg(style color);
@@ -139,8 +139,12 @@ void set_fg_HSL(HSL color);
 void set_bg_HSL(HSL color);
 void write_at(int x, int y, char *s);
 void erase_at(int x, int y, int length);
+void await_keypress(char *s);
+void await_enter(char *s);
 
 // window manipulation
+Window *createWindow(int x, int y);
+void deleteWindow(Window *w);
 void windowSetSize(Window *w, int width, int height);
 Rectangle windowGetSize(Window *w);
 void windowSetPosition(Window *w, int x, int y);
