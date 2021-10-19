@@ -411,7 +411,6 @@ void starry_night()
 
 int main()
 {
-  /*
   test_colors();
   printf("Press enter to continue");
   getchar();
@@ -435,7 +434,6 @@ int main()
   test_hue();
   printf("Press enter to continue\n");
   getchar();
-  */
 
   starry_night();
   printf("Press enter to continue\n");
