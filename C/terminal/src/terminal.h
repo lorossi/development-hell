@@ -153,5 +153,6 @@ int windowAddLine(Window *w, char *line);
 int windowChangeLine(Window *w, char *line, int line_count);
 int windowDeleteLine(Window *w, int line_count);
 void showWindow(Window *w);
+void clearWindow(Window *w);
 
 #endif

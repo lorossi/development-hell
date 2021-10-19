@@ -36,11 +36,15 @@ void test_windows()
   windowAddLine(&w_wide, "AND");
   windowAddLine(&w_wide, "TEXT INSIDE");
   windowSetAlignment(&w_wide, 0);
-  windowSetSize(&w_wide, 50, 3);
+  windowSetSize(&w_wide, 50, 5);
   windowSetAlignment(&w_wide, 0);
   showWindow(&w_wide);
 
   move_cursor_to_bottom();
+  printf("\nPress a button to continue");
+  getchar();
+  clearWindow(&w_wide);
+
   reset_styles();
   return;
 }

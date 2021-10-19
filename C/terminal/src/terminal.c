@@ -69,23 +69,23 @@ void _windowAutoResize(Window *w, int longest)
     longest++;
   }
 
-  windowSetSize(w, longest + 2 * w->padding, w->lines);
+  windowSetSize(w, longest + 2 * w->padding + 2, w->lines + 2);
 }
 
 /* Private function. Draw window border. */
 void _windowDrawBorder(Window *w)
 {
-  const int width = w->size.w + w->padding * 2;
-  const int height = w->size.h + 2;
+  const int width = w->size.w;
+  const int height = w->size.h;
 
   for (int x = 0; x < width; x++)
   {
     for (int y = 0; y < height; y++)
     {
-      move_cursor_to(x + w->pos.x, y + w->pos.y);
-
       if (y == 0)
       {
+        move_cursor_to(x + w->pos.x, y + w->pos.y);
+
         // top line
         if (x == 0)
           printf("\u250c"); // top left corner
@@ -96,6 +96,8 @@ void _windowDrawBorder(Window *w)
       }
       else if (y == height - 1)
       {
+        move_cursor_to(x + w->pos.x, y + w->pos.y);
+
         // bottom line
         if (x == 0)
           printf("\u2514"); // bottom left corner
@@ -106,6 +108,8 @@ void _windowDrawBorder(Window *w)
       }
       else if (x == 0 || x == width - 1)
       {
+        move_cursor_to(x + w->pos.x, y + w->pos.y);
+
         printf("\u2502"); // vertical line
       }
     }
@@ -119,10 +123,10 @@ int _windowCalculateSpacing(Window *w, int longest, int current_line)
     return 0;
 
   else if (w->alignment == 0)
-    return (w->size.w - w->padding - strlen(w->content[current_line])) / 2;
+    return (w->size.w - w->padding * 2 - 2 - strlen(w->content[current_line])) / 2;
 
   else if (w->alignment == 1)
-    return w->size.w - w->padding - 1 - strlen(w->content[current_line]);
+    return w->size.w - w->padding * 2 - 2 - strlen(w->content[current_line]);
 
   return 0;
 }
@@ -449,7 +453,7 @@ void erase_at(int x, int y, int length)
   return;
 }
 
-/* Sets size of a window. */
+/* Sets size of a window. Size is relative to the outer border. */
 void windowSetSize(Window *w, int width, int height)
 {
   if (width < 0 || height < 0)
@@ -558,13 +562,32 @@ void showWindow(Window *w)
   {
     // calculate spacing according to alignment
     int spacing = _windowCalculateSpacing(w, longest, i);
-    const int lx = w->pos.x + w->padding + spacing + 1; // line x coordinate
-    const int ly = w->pos.y + 1 + i;                    // line y cordinate
-    // clear line
-    //erase_at(lx, ly, w->size.w - 2 - 2 * w->padding);
+    // calculate line coordinates
+    const int lx = w->pos.x + w->padding + spacing + 1;
+    const int ly = w->pos.y + 1 + i;
     // draw text
     move_cursor_to(lx, ly);
     printf("%s", w->content[i]);
   }
   reset_fg();
+}
+
+/* Clears a window from the terminal */
+void clearWindow(Window *w)
+{
+  const int width = w->size.w;
+  const int height = w->size.h;
+
+  reset_bg();
+
+  for (int x = 0; x < width; x++)
+  {
+    for (int y = 0; y < height; y++)
+    {
+      // this is ugly AF, fix it
+      // TODO
+      move_cursor_to(x + w->pos.x, y + w->pos.y - 1);
+      printf(" ");
+    }
+  }
 }
