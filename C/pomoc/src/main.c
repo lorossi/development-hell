@@ -27,7 +27,7 @@ typedef struct phase
 typedef struct
 {
   Phase *current_phase;
-  Window *w_phase, *w_total;
+  Window *w_phase, *w_total, *w_quote;
   int study_phases;
 } Parameters;
 
@@ -35,7 +35,8 @@ const int STUDYDURATION = 45;
 const int SHORTBREAKDURATION = 5;
 const int LONGBREAKDURATION = 20;
 const int STUDYSESSIONS = 4;
-const int BORDER = 1;
+const int X_BORDER = 2;
+const int Y_BORDER = 1;
 const int PADDING = 2;
 
 volatile int loop;
@@ -131,6 +132,17 @@ void format_time(int elapsed, char *buffer)
   return;
 }
 
+/* Get local time and save into buffer */
+void get_local_time(char *buffer)
+{
+  time_t now;
+  struct tm tm;
+  now = time(NULL);
+  tm = *localtime(&now);
+  sprintf(buffer, "%d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+  return;
+}
+
 /* Routine handling terminal output */
 void *show_routine(void *args)
 {
@@ -180,14 +192,25 @@ void *show_routine(void *args)
     sprintf(buffer, "total time studied: %s", num_buffer);
     windowAddLine(p->w_total, buffer);
 
+    // third line of w_total
+    get_local_time(buffer);
+    windowAddLine(p->w_total, buffer);
+
     // set position of w_total
     windowAutoResize(p->w_phase); // trigger resize to get the actual width
-    Position br_corner = windowGetBottomRight(p->w_phase);
-    windowSetPosition(p->w_total, br_corner.x + 1, BORDER);
+    Position phase_br_corner = windowGetBottomRight(p->w_phase);
+    windowSetPosition(p->w_total, phase_br_corner.x + 1, Y_BORDER);
+
+    // set position of w_quote
+    windowAutoResize(p->w_total); // trigger resize to get the actual width
+    Position total_br_corner = windowGetBottomRight(p->w_total);
+    windowSetPosition(p->w_quote, X_BORDER, total_br_corner.y);
+    windowSetSize(p->w_quote, total_br_corner.x - X_BORDER, 3);
 
     // show windows
     windowShow(p->w_phase);
     windowShow(p->w_total);
+    windowShow(p->w_quote);
 
     // idle
     msec_sleep(50);
@@ -248,20 +271,27 @@ int main()
   int show_return, advance_return;
   Phase phases[3], *current_phase;
   Parameters *p;
-  Window *w_phase, *w_total;
+  Window *w_phase, *w_total, *w_quote;
 
   init_pomodoro(phases);
   current_phase = set_initial_phase(phases);
 
   // w_phase keeping track of current phase
-  w_phase = createWindow(BORDER, BORDER);
+  w_phase = createWindow(X_BORDER, Y_BORDER);
   windowSetAlignment(w_phase, 0);
   windowSetPadding(w_phase, PADDING);
   // w_phase keeping track of total time
   w_total = createWindow(0, 0);
   windowSetAlignment(w_total, 0);
   windowSetPadding(w_total, PADDING);
-  windowSetFGcolor(w_total, fg_YELLOW);
+  windowSetFGcolor(w_total, fg_BRIGHT_YELLOW);
+  // w_quote with... a quote
+  w_quote = createWindow(X_BORDER, Y_BORDER);
+  windowSetAlignment(w_quote, 0);
+  windowSetAutoSize(w_quote, 0);
+  windowSetPadding(w_quote, PADDING);
+  windowSetFGcolor(w_quote, fg_BRIGHT_BLUE);
+  windowAddLine(w_quote, "INSPIRATIONAL QUOTE HERE");
 
   // pack the parameters
   p = malloc(sizeof(Parameters));
@@ -269,6 +299,7 @@ int main()
   p->study_phases = 0;
   p->w_phase = w_phase;
   p->w_total = w_total;
+  p->w_quote = w_quote;
 
   //.start the loop
   loop = 1;

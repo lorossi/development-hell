@@ -308,6 +308,8 @@ void enter_raw_mode()
   struct termios raw;
   tcgetattr(STDIN_FILENO, &raw);
   raw.c_lflag &= (~(ICANON | ECHO));
+  raw.c_cc[VTIME] = 0;
+  raw.c_cc[VMIN] = 0;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
@@ -317,6 +319,8 @@ void exit_raw_move()
   struct termios raw;
   tcgetattr(STDIN_FILENO, &raw);
   raw.c_lflag |= ((ICANON | ECHO));
+  raw.c_cc[VTIME] = 0;
+  raw.c_cc[VMIN] = 1;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
