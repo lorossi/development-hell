@@ -67,41 +67,44 @@ static const style TEXT_RESET = 0;
 #define SHOWCURSOR ESCAPE "[?25h"
 #define BELL "\a"
 
-#define MAX_LINES 50
+#define MAX_LINES 10
+#define MAX_WIDTH 250
 
-typedef struct
+typedef struct rect
 {
-  int w, h;
+  int width, height;
 } Rectangle;
 
-typedef struct
+typedef struct pos
 {
   int x, y;
 } Position;
 
-typedef struct
+typedef struct rgb
 {
   int R; // range [0-255]
   int G; // range [0-255]
   int B; // range [0-255]
 } RGB;
 
-typedef struct
+typedef struct hsl
 {
   int H; // range [0-360]
   int S; // range [0-100]
   int L; // range [0-100]
 } HSL;
 
-typedef struct
+typedef struct window
 {
-  int auto_size;
-  int lines;
+  int auto_width, auto_height;
+  int buffer_size;
   int padding;
   int alignment;
+  int line_wrap;
   style fg_color;
   style bg_color;
-  char content[MAX_LINES][50];
+  char lines_buffer[MAX_LINES][MAX_WIDTH];
+  char display_lines[MAX_LINES][MAX_WIDTH];
   Rectangle size;
   Position pos;
 } Window;
@@ -148,13 +151,17 @@ int await_enter(char *s);
 Window *createWindow(int x, int y);
 void deleteWindow(Window *w);
 void windowSetSize(Window *w, int width, int height);
+void windowSetWidth(Window *w, int width);
+void windowSetHeight(Window *w, int height);
 Rectangle windowGetSize(Window *w);
 void windowSetPosition(Window *w, int x, int y);
 Position windowGetPosition(Window *w);
 Position windowGetBottomRight(Window *w);
 void windowSetPadding(Window *w, int padding);
 void windowSetAlignment(Window *w, int alignment);
-void windowSetAutoSize(Window *w, int auto_size);
+void windowSetAutoWidth(Window *w, int auto_width);
+void windowSetAutoHeight(Window *w, int auto_width);
+void windowSetLineWrap(Window *w, int line_wrap);
 void windowAutoResize(Window *w);
 void windowSetFGcolor(Window *w, style fg_color);
 void windowSetBGcolor(Window *w, style bg_color);

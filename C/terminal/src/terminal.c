@@ -51,19 +51,19 @@ int _windowCalculateLongestLine(Window *w)
 {
   int longest = 0;
 
-  for (int i = 0; i < w->lines; i++)
+  for (int i = 0; i < w->buffer_size; i++)
   {
-    if (strlen(w->content[i]) > longest)
+    if (strlen(w->lines_buffer[i]) > longest)
     {
-      longest = strlen(w->content[i]);
+      longest = strlen(w->lines_buffer[i]);
     }
   }
 
   return longest;
 }
 
-/* Private function. Auto resize a window. */
-void _windowAutoResize(Window *w, int longest)
+/* Private function. Auto resize a window width. */
+void _windowAutoWidth(Window *w, int longest)
 {
   if (longest % 2 == 1 && w->alignment == 0)
   {
@@ -71,14 +71,20 @@ void _windowAutoResize(Window *w, int longest)
     longest++;
   }
 
-  windowSetSize(w, longest + 2 * w->padding + 2, w->lines + 2);
+  w->size.width = longest + 2 + w->padding * 2;
+}
+
+/* Private function. Auto resize a window height. */
+void _windowAutoHeight(Window *w)
+{
+  w->size.height = w->buffer_size + 2;
 }
 
 /* Private function. Draw window border. */
 void _windowDrawBorder(Window *w)
 {
-  const int width = w->size.w;
-  const int height = w->size.h;
+  const int width = w->size.width;
+  const int height = w->buffer_size + 2;
 
   for (int x = 0; x < width; x++)
   {
@@ -125,12 +131,67 @@ int _windowCalculateSpacing(Window *w, int current_len)
     return 0;
 
   else if (w->alignment == 0)
-    return (w->size.w - w->padding * 2 - 2 - current_len) / 2;
+    return (w->size.width - w->padding * 2 - 2 - current_len) / 2;
 
   else if (w->alignment == 1)
-    return w->size.w - w->padding * 2 - 2 - current_len;
+    return w->size.width - w->padding * 2 - 2 - current_len;
 
   return 0;
+}
+
+/* Private function. Wrap lines. */
+int _windowLinesWrap(Window *w)
+{
+  int current = 0;
+  const int width = w->size.width - 2 * w->padding;
+
+  for (int i = 0; i < w->buffer_size; i++)
+  {
+    const int len = strlen(w->lines_buffer[i]);
+
+    if (len > width)
+    {
+      int current_len = 0;
+      while (current_len < len)
+      {
+        int copy_size = width;
+        if (copy_size + current_len > len)
+          copy_size = len - current_len;
+
+        strncpy(w->display_lines[current], w->lines_buffer[i] + current_len, copy_size);
+        current++;
+        current_len += width;
+      }
+    }
+    else
+    {
+      strcpy(w->display_lines[current], w->lines_buffer[i]);
+      current++;
+    }
+  }
+
+  if (current > w->size.height - 2 && w->auto_height)
+    w->size.height = current + 2;
+  else if (w->size.height < current - 2)
+    current = w->size.height - 2;
+
+  w->buffer_size = current;
+  return current;
+}
+
+/* Private function. Copy lines from buffer to display */
+int _windowLinesUnbuffer(Window *w)
+{
+  for (int i = 0; i < w->buffer_size; i++)
+    strcpy(w->display_lines[i], w->lines_buffer[i]);
+
+  return w->buffer_size;
+}
+
+/* Private function. Clears a window buffer. */
+void _windowClearUnbuffered(Window *w)
+{
+  w->buffer_size = 0;
 }
 
 /* Creates a RGB struct containing the three channels.
@@ -151,9 +212,9 @@ HSL createHSLcolor(int H, int S, int L)
 Rectangle createRectangle(int w, int h)
 {
   if (w < 0 || h < 0)
-    return (Rectangle){.w = -1, .h = -1};
+    return (Rectangle){.width = -1, .height = -1};
 
-  return (Rectangle){.w = w, .h = h};
+  return (Rectangle){.width = w, .height = h};
 }
 
 /* Creates a position struct. */
@@ -171,14 +232,16 @@ Window *createWindow(int x, int y)
   Window *new = malloc(sizeof(Window));
 
   *new = (Window){
-      .pos = pos,
+      .auto_width = 1,
+      .auto_height = 1,
+      .buffer_size = 0,
       .padding = 1,
-      .size = size,
       .alignment = -1,
-      .lines = 0,
-      .auto_size = 1,
+      .line_wrap = 1,
       .fg_color = fg_DEFAULT,
       .bg_color = bg_DEFAULT,
+      .size = size,
+      .pos = pos,
   };
 
   return new;
@@ -328,8 +391,8 @@ void exit_raw_mode()
 void move_cursor_to_bottom()
 {
   Rectangle terminal_size = get_terminal_size();
-  if (terminal_size.w != -1 && terminal_size.h != -1)
-    move_cursor_to(0, terminal_size.h);
+  if (terminal_size.width != -1 && terminal_size.height != -1)
+    move_cursor_to(0, terminal_size.height);
 
   return;
 }
@@ -515,10 +578,37 @@ void windowSetSize(Window *w, int width, int height)
   if (width < 0 || height < 0)
     return;
 
-  if (width != w->size.w || height != w->size.h)
+  if (width != w->size.width || height != w->size.height)
+    w->size = createRectangle(width, height);
+
+  return;
+}
+
+/* Sets width of a window. Size is relative to the outer border. */
+void windowSetWidth(Window *w, int width)
+{
+  if (width < 0)
+    return;
+
+  if (width != w->size.width)
   {
     windowClear(w);
-    w->size = createRectangle(width, height);
+    w->size.width = width;
+  }
+
+  return;
+}
+
+/* Sets height of a window. Size is relative to the outer border. */
+void windowSetHeight(Window *w, int height)
+{
+  if (height < 0)
+    return;
+
+  if (height != w->size.height)
+  {
+    windowClear(w);
+    w->size.height = height;
   }
 
   return;
@@ -547,8 +637,8 @@ Position windowGetPosition(Window *w)
 Position windowGetBottomRight(Window *w)
 {
   return (Position){
-      .x = w->pos.x + w->size.w,
-      .y = w->pos.y + w->size.h,
+      .x = w->pos.x + w->size.width,
+      .y = w->pos.y + w->size.height,
   };
 }
 
@@ -570,21 +660,38 @@ void windowSetAlignment(Window *w, int alignment)
   return;
 }
 
-/* Sets window auto resize. Values: 1 for automatic resizing, 0 for manual sizing. */
-void windowSetAutoSize(Window *w, int auto_size)
+/* Sets window auto width. Values: 1 for automatic width, 0 for manual sizing. */
+void windowSetAutoWidth(Window *w, int auto_size)
 {
   if (auto_size != 0 && auto_size != 1)
     return;
 
-  w->auto_size = auto_size;
+  w->auto_width = auto_size;
+}
+
+/* Sets window line wrap. Values: 1 for automatic wrapping, 0 for no wrapping. */
+void windowSetLineWrap(Window *w, int line_wrap)
+{
+  if (line_wrap != 0 && line_wrap != 1)
+    return;
+
+  w->line_wrap = line_wrap;
 }
 
 /* Manually trigger window resize. */
 void windowAutoResize(Window *w)
 {
-  int longest;
-  longest = _windowCalculateLongestLine(w);
-  _windowAutoResize(w, longest);
+  if (w->auto_width)
+  {
+    int longest;
+    longest = _windowCalculateLongestLine(w);
+    _windowAutoWidth(w, longest);
+  }
+
+  if (w->auto_height)
+  {
+    _windowAutoHeight(w);
+  }
 }
 
 /* Sets window text color. */
@@ -604,50 +711,50 @@ void windowSetBGcolor(Window *w, style bg_color)
 /* Returns the number of line of text of a window. */
 int windowGetLines(Window *w)
 {
-  return w->lines;
+  return w->buffer_size;
 }
 
 /* Adds a line of text to the window. Returns -1 in case of error, otherwise returns the size of the line. */
 int windowAddLine(Window *w, char *line)
 {
-  if (w->lines > MAX_LINES)
+  if (w->buffer_size > MAX_LINES)
     return -1;
 
-  strcpy(w->content[w->lines], line);
-  w->lines++;
+  strcpy(w->lines_buffer[w->buffer_size], line);
+  w->buffer_size++;
 
-  return sizeof(w->content[w->lines - 1]);
+  return sizeof(w->lines_buffer[w->buffer_size - 1]);
 }
 
 /* Changes a line of text in the window. Returns -1 in case of error, otherwise returns the size of the line. */
 int windowChangeLine(Window *w, char *line, int line_count)
 {
-  if (line_count > w->lines)
+  if (line_count > w->buffer_size)
     return -1;
 
-  strcpy(w->content[line_count], line);
+  strcpy(w->lines_buffer[line_count], line);
 
-  return sizeof(w->content[line_count]);
+  return sizeof(w->lines_buffer[line_count]);
 }
 
 /* Deletes a line of text in the window. Returns -1 in case of error, otherwise returns the number of lines. */
 int windowDeleteLine(Window *w, int line_count)
 {
-  if (line_count >= w->lines)
+  if (line_count >= w->buffer_size)
     return -1;
 
-  w->lines--;
+  w->buffer_size--;
 
-  for (int i = line_count; i < w->lines; i++)
-    strcpy(w->content[i], w->content[i + 1]);
+  for (int i = line_count; i < w->buffer_size; i++)
+    strcpy(w->lines_buffer[i], w->lines_buffer[i + 1]);
 
-  return w->lines;
+  return w->buffer_size;
 }
 
 /* Deletes a all the lines of text in the window. Returns -1 in case of error. */
 int windowDeleteAllLines(Window *w)
 {
-  w->lines = 0;
+  w->buffer_size = 0;
 
   return 0;
 }
@@ -656,14 +763,24 @@ int windowDeleteAllLines(Window *w)
 void windowShow(Window *w)
 {
   // no text, return
-  if (w->lines == 0)
+  if (w->buffer_size == 0)
     return;
 
-  // calculate longeast line
+  // calculate longest line
   int longest = _windowCalculateLongestLine(w);
+
   // auto resize window
-  if (w->auto_size)
-    _windowAutoResize(w, longest);
+  if (w->auto_width)
+    _windowAutoWidth(w, longest);
+  if (w->auto_height)
+    _windowAutoHeight(w);
+
+  // check if lines need to be wrapped
+  const int width = w->size.width - 2 * w->padding;
+  if (longest >= width && w->line_wrap)
+    _windowLinesWrap(w); // windows are auto resized if needed
+  else
+    _windowLinesUnbuffer(w);
 
   // set styles
   set_fg(w->fg_color);
@@ -672,21 +789,21 @@ void windowShow(Window *w)
   // draw outer border
   _windowDrawBorder(w);
 
-  for (int i = 0; i < w->lines; i++)
+  for (int i = 0; i < w->buffer_size; i++)
   {
     // calculate line length
-    const int ll = strlen(w->content[i]);
+    const int ll = strlen(w->display_lines[i]);
     // calculate spacing according to alignment
     int spacing = _windowCalculateSpacing(w, ll);
     // calculate line coordinates
     const int lx = w->pos.x + w->padding + spacing + 1;
-    const int ly = w->pos.y + 1 + i;
+    const int ly = w->pos.y + i + 1;
     // draw text
     move_cursor_to(lx, ly);
-    printf("%s", w->content[i]);
+    printf("%s", w->display_lines[i]);
   }
-  reset_fg();
 
+  reset_fg();
   move_cursor_to(0, 0);
 }
 
@@ -694,6 +811,9 @@ void windowShow(Window *w)
 void windowClear(Window *w)
 {
   reset_bg();
-  for (int y = 0; y < w->size.h; y++)
-    erase_at(w->pos.x, y + w->pos.y - 1, w->size.w);
+  for (int y = 0; y < w->size.height; y++)
+    erase_at(w->pos.x, y + w->pos.y, w->size.width);
+
+  // clear window buffer
+  _windowClearUnbuffered(w);
 }
