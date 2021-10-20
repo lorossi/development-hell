@@ -6,7 +6,7 @@
 #include <unistd.h>  // for nanosleep()
 #include <pthread.h> // for multithread
 #include <string.h>  // for strlen()
-#include <stdlib.h>  // for malloc() and free()
+#include <stdlib.h>  // for malloc() and free() and rand()
 
 #include "terminal.h"
 
@@ -38,6 +38,8 @@ const int STUDYSESSIONS = 4;
 const int X_BORDER = 2;
 const int Y_BORDER = 1;
 const int PADDING = 2;
+const int QUOTES_NUM = 100;
+#define QUOTES_PATH "src/include/QUOTES"
 
 volatile int loop;
 
@@ -113,7 +115,8 @@ Phase *set_initial_phase(Phase phases[3])
   return current_phase;
 }
 
-void format_time(int elapsed, char *buffer)
+/* Format elapsed time and save into buffer */
+void format_elapsed_time(int elapsed, char *buffer)
 {
   int seconds, minutes, hours;
 
@@ -132,8 +135,8 @@ void format_time(int elapsed, char *buffer)
   return;
 }
 
-/* Get local time and save into buffer */
-void get_local_time(char *buffer)
+/* Format local time and save into buffer */
+void format_local_time(char *buffer)
 {
   time_t now;
   struct tm tm;
@@ -143,9 +146,72 @@ void get_local_time(char *buffer)
   return;
 }
 
+/* Get random quote and save into buffer */
+void get_random_quote(char *b_quote, char *b_author)
+{
+  char buffer[250];
+
+  int rindex, count;
+  rindex = random() % QUOTES_NUM;
+  count = 0;
+
+  FILE *fp;
+  fp = fopen(QUOTES_PATH, "r");
+
+  while (fgets(buffer, 250, fp) != NULL)
+  {
+
+    if (count == rindex)
+    {
+      int line_end;
+      // remove newline and find end
+      for (int i = 0; i < 250; i++)
+      {
+        if (buffer[i] == '\n')
+        {
+          buffer[i] = '\0';
+          line_end = i;
+          break;
+        }
+      }
+
+      // find author and remove it from string
+      int author_start;
+      for (int i = line_end; i >= 0; i--)
+      {
+        if (buffer[i] == '@')
+        {
+          buffer[i] = '\0';
+          author_start = i + 1;
+          break;
+        }
+      }
+
+      // copy quote into destination
+      strcpy(b_quote, buffer);
+
+      // find author in buffer
+      for (int i = 0; i < line_end - author_start; i++)
+      {
+        buffer[i] = buffer[i + author_start];
+      }
+      buffer[line_end - author_start] = '\0';
+
+      // copy author into destination
+      strcpy(b_author, buffer);
+      break;
+    }
+
+    count++;
+  }
+
+  fclose(fp);
+}
+
 /* Routine handling terminal output */
 void *show_routine(void *args)
 {
+  int first_iteration;
   Parameters *p = args;
   while (loop)
   {
@@ -173,7 +239,7 @@ void *show_routine(void *args)
 
     // format time
     elapsed = time(NULL) - p->current_phase->started;
-    format_time(elapsed, num_buffer);
+    format_elapsed_time(elapsed, num_buffer);
     // third line of phase window
     sprintf(buffer, "elapsed time: %s", num_buffer);
     windowAddLine(p->w_phase, buffer);
@@ -188,29 +254,35 @@ void *show_routine(void *args)
     if (p->current_phase->is_study)
       total_studied += elapsed;
 
-    format_time(total_studied, num_buffer);
+    format_elapsed_time(total_studied, num_buffer);
     sprintf(buffer, "total time studied: %s", num_buffer);
     windowAddLine(p->w_total, buffer);
 
     // third line of w_total
-    get_local_time(buffer);
+    format_local_time(buffer);
     windowAddLine(p->w_total, buffer);
 
-    // set position of w_total
-    windowAutoResize(p->w_phase); // trigger resize to get the actual width
-    Position phase_br_corner = windowGetBottomRight(p->w_phase);
-    windowSetPosition(p->w_total, phase_br_corner.x + 1, Y_BORDER);
+    if (first_iteration)
+    {
+      // set position of w_total
+      windowAutoResize(p->w_phase); // trigger resize to get the actual width
+      Position phase_br_corner = windowGetBottomRight(p->w_phase);
+      windowSetPosition(p->w_total, phase_br_corner.x + 1, Y_BORDER);
 
-    // set position of w_quote
-    windowAutoResize(p->w_total); // trigger resize to get the actual width
-    Position total_br_corner = windowGetBottomRight(p->w_total);
-    windowSetPosition(p->w_quote, X_BORDER, total_br_corner.y);
-    windowSetSize(p->w_quote, total_br_corner.x - X_BORDER, 3);
+      // set position of w_quote
+      windowAutoResize(p->w_total); // trigger resize to get the actual width
+      Position total_br_corner = windowGetBottomRight(p->w_total);
+      windowSetPosition(p->w_quote, X_BORDER, total_br_corner.y);
+      windowSetSize(p->w_quote, total_br_corner.x - X_BORDER, 4);
+
+      windowShow(p->w_quote);
+
+      first_iteration = 0;
+    }
 
     // show windows
     windowShow(p->w_phase);
     windowShow(p->w_total);
-    windowShow(p->w_quote);
 
     // idle
     msec_sleep(50);
@@ -265,6 +337,14 @@ void *advance_routine(void *args)
 
 int main()
 {
+  //start the loop
+  loop = 1;
+  // init random seed
+  srand(time(NULL));
+  // load quote
+  char b_quote[250], b_author[250];
+  get_random_quote(b_quote, b_author);
+
   // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
   pthread_t show_thread, advance_thread;
@@ -288,10 +368,11 @@ int main()
   // w_quote with... a quote
   w_quote = createWindow(X_BORDER, Y_BORDER);
   windowSetAlignment(w_quote, 0);
-  windowSetAutoSize(w_quote, 0);
+  windowSetAutoWidth(w_quote, 0);
   windowSetPadding(w_quote, PADDING);
   windowSetFGcolor(w_quote, fg_BRIGHT_BLUE);
-  windowAddLine(w_quote, "INSPIRATIONAL QUOTE HERE");
+  windowAddLine(w_quote, b_quote);
+  windowAddLine(w_quote, b_author);
 
   // pack the parameters
   p = malloc(sizeof(Parameters));
@@ -300,9 +381,6 @@ int main()
   p->w_phase = w_phase;
   p->w_total = w_total;
   p->w_quote = w_quote;
-
-  //.start the loop
-  loop = 1;
 
   // prepare terminal
   clear_terminal();
