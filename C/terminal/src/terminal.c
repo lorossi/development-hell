@@ -306,22 +306,22 @@ void show_cursor()
 void enter_raw_mode()
 {
   struct termios raw;
-  tcgetattr(STDIN_FILENO, &raw);
-  raw.c_lflag &= (~(ICANON | ECHO));
+  tcgetattr(0, &raw);
+  raw.c_lflag &= ~(ICANON | ECHO);
   raw.c_cc[VTIME] = 0;
   raw.c_cc[VMIN] = 0;
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+  tcsetattr(0, TCSANOW, &raw);
 }
 
 /* Leaves terminal raw mode. */
-void exit_raw_move()
+void exit_raw_mode()
 {
   struct termios raw;
-  tcgetattr(STDIN_FILENO, &raw);
-  raw.c_lflag |= ((ICANON | ECHO));
+  tcgetattr(0, &raw);
+  raw.c_lflag |= (ICANON | ECHO);
   raw.c_cc[VTIME] = 0;
   raw.c_cc[VMIN] = 1;
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+  tcsetattr(0, TCSANOW, &raw);
 }
 
 /* Moves the cursor to the bottom of the screen. */
@@ -351,7 +351,7 @@ Rectangle get_terminal_size()
 /* Moves cursor to x, y coordinates (zero-indexed). */
 void move_cursor_to(int x, int y)
 {
-  printf(ESCAPE "[%i;%iH", y + 1, x + 1);
+  printf(ESCAPE "[%i;%iH", y, x);
   return;
 };
 
@@ -469,26 +469,44 @@ void erase_at(int x, int y, int length)
   return;
 }
 
-/* Awaits a keypress. A message is prompted on the terminal. */
-void await_keypress(char *s)
+/* Polls a keypress. Returns the number of read bytes. The keystroke is placed into buffer. */
+int poll_keypress(char *buffer)
 {
+  int read_bytes;
   enter_raw_mode();
-  if (s != NULL)
-    printf("%s", s);
-  getchar();
-  exit_raw_move();
+  read_bytes = read(0, buffer, 100);
+  exit_raw_mode();
+  fflush(NULL);
 
-  return;
+  return read_bytes;
 }
 
-/* Awaits a enter keypress. A message is prompted on the terminal. */
-void await_enter(char *s)
+/* Awaits a keypress. A message is prompted on the terminal. Pass NULL to skip. */
+int await_keypress(char *s)
 {
   if (s != NULL)
     printf("%s", s);
-  getchar();
 
-  return;
+  int read_bytes;
+  char *buffer[4];
+
+  enter_raw_mode();
+  do
+  {
+    read_bytes = read(0, buffer, 4);
+  } while (read_bytes == 0);
+  exit_raw_mode();
+
+  return read_bytes;
+}
+
+/* Awaits a enter keypress. A message is prompted on the terminal. Pass NULL to skip. */
+int await_enter(char *s)
+{
+  if (s != NULL)
+    printf("%s", s);
+
+  return getchar();
 }
 
 /* Sets size of a window. Size is relative to the outer border. */
