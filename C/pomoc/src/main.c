@@ -10,9 +10,13 @@
 
 #include "terminal.h"
 
+#define QUOTES_PATH ".QUOTES"
+#define SAVE_PATH ".SAVE"
+
 typedef struct phase
 {
   char *name;
+  int id;
   int duration;
   int repetitions;
   int completed;
@@ -26,9 +30,12 @@ typedef struct phase
 
 typedef struct parameters
 {
-  Phase *current_phase;
-  Window *w_phase, *w_total, *w_quote;
-  int study_phases, windows_force_reload;
+  Phase *current_phase;                // current phase of the timer
+  Window *w_phase, *w_total, *w_quote; // displayed windows
+  int study_phases;                    // amount of currently studied phases
+  int windows_force_reload;            // flag to force redraw of the windows
+  int phase_elapsed;                   // total time elapsed in the current phase
+  int study_elapsed;                   // total time studied in the session
 } Parameters;
 
 const int STUDYDURATION = 45;
@@ -38,10 +45,45 @@ const int STUDYSESSIONS = 4;
 const int X_BORDER = 2;
 const int Y_BORDER = 1;
 const int PADDING = 2;
-const int QUOTES_NUM = 100;
-#define QUOTES_PATH "src/include/QUOTES"
+const int BUFLEN = 250;
 
 volatile int loop;
+
+int file_read_line(char *buffer, int max_bytes, FILE *fp)
+{
+  if (fgets(buffer, BUFLEN, fp) == NULL)
+    return -1;
+
+  int len = strlen(buffer);
+  // remove newline from last character
+  buffer[len - 1] = '\0';
+  return len;
+}
+
+/* Count the number of lines in a file. */
+int file_count_lines(FILE *fp)
+{
+  fpos_t old_pos;
+  int lines;
+
+  // save old position
+  fgetpos(fp, &old_pos);
+  // reset to start
+  rewind(fp);
+
+  lines = 0;
+  while (!feof(fp))
+  {
+    char ch = fgetc(fp);
+    if (ch == '\n')
+      lines++;
+  }
+
+  // return to old position
+  fsetpos(fp, &old_pos);
+
+  return lines;
+}
 
 void SIGINT_handler()
 {
@@ -62,12 +104,25 @@ void msec_sleep(int msec)
   nanosleep(&ts, NULL);
 }
 
+/* Sleep a set amount of s */
+void sec_sleep(int sec)
+{
+  if (sec < 0)
+    return;
+
+  struct timespec ts;
+  ts.tv_sec = sec;
+  ts.tv_nsec = 0;
+  nanosleep(&ts, NULL);
+}
+
 /* Assign all the variables needed to run the timer */
 void init_pomodoro(Phase phases[3])
 {
   // create array of phases
   phases[0] = (Phase){
       .name = "study",
+      .id = 0,
       .duration = STUDYDURATION,
       .repetitions = STUDYSESSIONS,
       .completed = 0,
@@ -81,6 +136,7 @@ void init_pomodoro(Phase phases[3])
 
   phases[1] = (Phase){
       .name = "short break",
+      .id = 1,
       .duration = SHORTBREAKDURATION,
       .repetitions = 0,
       .completed = 0,
@@ -93,6 +149,7 @@ void init_pomodoro(Phase phases[3])
 
   phases[2] = (Phase){
       .name = "long break",
+      .id = 2,
       .duration = LONGBREAKDURATION,
       .repetitions = 0,
       .completed = 0,
@@ -102,6 +159,22 @@ void init_pomodoro(Phase phases[3])
       .fg_color = fg_GREEN,
       .bg_color = bg_DEFAULT,
   };
+}
+
+Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote)
+{
+  Parameters *p = malloc(sizeof(Parameters));
+  p->current_phase = current_phase;
+  p->study_phases = 0;
+  p->study_elapsed = 0;
+  p->windows_force_reload = 1;
+  p->phase_elapsed = 0;
+  p->study_elapsed = 0;
+  p->w_phase = w_phase;
+  p->w_total = w_total;
+  p->w_quote = w_quote;
+
+  return p;
 }
 
 /* Set initial phase */
@@ -142,34 +215,40 @@ void format_local_time(char *buffer)
   struct tm tm;
   now = time(NULL);
   tm = *localtime(&now);
-  sprintf(buffer, "%d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+  sprintf(buffer, "%d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
   return;
 }
 
 /* Get random quote and save into buffer */
-void get_random_quote(char *b_quote, char *b_author)
+int get_random_quote(char *b_quote, char *b_author)
 {
-  char buffer[250];
+  char r_buffer[BUFLEN];
 
   int rindex, count;
-  rindex = random() % QUOTES_NUM;
   count = 0;
 
   FILE *fp;
   fp = fopen(QUOTES_PATH, "r");
 
-  while (fgets(buffer, 250, fp) != NULL)
+  if (fp == NULL)
+    return -1;
+
+  // calculate the number of lines
+  const int quotes_num = file_count_lines(fp);
+  rindex = random() % quotes_num;
+
+  while (fgets(r_buffer, BUFLEN, fp) != NULL)
   {
 
     if (count == rindex)
     {
       int line_end;
       // remove newline and find end
-      for (int i = 0; i < 250; i++)
+      for (int i = 0; i < BUFLEN; i++)
       {
-        if (buffer[i] == '\n')
+        if (r_buffer[i] == '\n')
         {
-          buffer[i] = '\0';
+          r_buffer[i] = '\0';
           line_end = i;
           break;
         }
@@ -179,26 +258,26 @@ void get_random_quote(char *b_quote, char *b_author)
       int author_start;
       for (int i = line_end; i >= 0; i--)
       {
-        if (buffer[i] == '@')
+        if (r_buffer[i] == '@')
         {
-          buffer[i] = '\0';
+          r_buffer[i] = '\0';
           author_start = i + 1;
           break;
         }
       }
 
       // copy quote into destination
-      strcpy(b_quote, buffer);
+      strcpy(b_quote, r_buffer);
 
       // find author in buffer
       for (int i = 0; i < line_end - author_start; i++)
       {
-        buffer[i] = buffer[i + author_start];
+        r_buffer[i] = r_buffer[i + author_start];
       }
-      buffer[line_end - author_start] = '\0';
+      r_buffer[line_end - author_start] = '\0';
 
       // copy author into destination
-      strcpy(b_author, buffer);
+      strcpy(b_author, r_buffer);
       break;
     }
 
@@ -206,6 +285,149 @@ void get_random_quote(char *b_quote, char *b_author)
   }
 
   fclose(fp);
+
+  return 0;
+}
+
+/* Format local date to compare savefiles and save into buffer. */
+void format_date(char *buffer)
+{
+  time_t now;
+  struct tm tm;
+  now = time(NULL);
+  tm = *localtime(&now);
+  sprintf(buffer, "%d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+}
+
+/* Save stats to file.
+Structure of the save file:
+- timestamp (year-month-day)
+- phase elapsed
+- total study elapsed
+- total study phases
+- current phase id
+- current phase completed
+- current phase started
+*/
+int save_stats(Parameters *p)
+{
+  FILE *fp;
+  char w_buffer[BUFLEN];
+
+  fp = fopen(SAVE_PATH, "w");
+  if (fp == NULL)
+    return -1;
+
+  // save timestamp
+  format_date(w_buffer);
+  fputs(w_buffer, fp);
+  fputc('\n', fp);
+
+  // save phase elapsed
+  sprintf(w_buffer, "%i\n", p->phase_elapsed);
+  fputs(w_buffer, fp);
+
+  // save total study elapsed
+  sprintf(w_buffer, "%i\n", p->study_elapsed);
+  fputs(w_buffer, fp);
+
+  // save total study phases
+  sprintf(w_buffer, "%i\n", p->study_phases);
+  fputs(w_buffer, fp);
+
+  // save current phase id
+  sprintf(w_buffer, "%i\n", p->current_phase->id);
+  fputs(w_buffer, fp);
+
+  // save current completed phases
+  sprintf(w_buffer, "%i\n", p->current_phase->completed);
+  fputs(w_buffer, fp);
+
+  // save current phase started
+  sprintf(w_buffer, "%li\n", p->current_phase->started);
+  fputs(w_buffer, fp);
+
+  fclose(fp);
+
+  return 0;
+}
+
+/* Loads stats from file. */
+int load_stats(Parameters *p, Phase *phases)
+{
+  FILE *fp;
+  char buffer[BUFLEN];
+  char r_buffer[BUFLEN];
+  int num_buffer;
+
+  fp = fopen(SAVE_PATH, "r");
+  if (fp == NULL)
+    return -1;
+
+  // read date
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -1;
+
+  // format current date
+  format_date(buffer);
+
+  // if date from file and current date are different,
+  // then return as the save file is not significative for
+  // the current session
+  if (strcmp(buffer, r_buffer) != 0)
+    return 0;
+
+  // read phase elapsed
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -2;
+
+  // update the parameters struct
+  p->phase_elapsed = atoi(r_buffer);
+
+  // read total study elapsed
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -3;
+  // update the parameters struct
+  p->study_elapsed = atoi(r_buffer);
+
+  // read total study phases
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -4;
+  // update the parameters struct
+  p->study_phases = atoi(r_buffer);
+
+  // read current phase id
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -5;
+
+  // update the parameters struct
+  num_buffer = atoi(r_buffer);
+  // cycle to find the correct phase
+  for (int i = 0; i < 3; i++)
+  {
+    if (phases[i].id == num_buffer)
+    {
+      p->current_phase = &phases[i];
+      break;
+    }
+
+    return -6;
+  }
+
+  // read current phase completed
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -7;
+  // update the parameters struct
+  p->current_phase->completed = atoi(r_buffer);
+
+  // does not have much sense tho
+  // read current phase started
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -8;
+  // update the parameters struct
+  p->current_phase->started = atoi(r_buffer);
+
+  return 0;
 }
 
 /* Routine handling terminal output */
@@ -214,9 +436,8 @@ void *show_routine(void *args)
   Parameters *p = args;
   while (loop)
   {
-    int elapsed;
-    char buffer[50];
-    char num_buffer[20];
+    char buffer[BUFLEN];
+    char num_buffer[BUFLEN];
 
     // remove old lines
     windowDeleteAllLines(p->w_phase);
@@ -237,8 +458,7 @@ void *show_routine(void *args)
     windowAddLine(p->w_phase, buffer);
 
     // format time
-    elapsed = time(NULL) - p->current_phase->started;
-    format_elapsed_time(elapsed, num_buffer);
+    format_elapsed_time(p->phase_elapsed, num_buffer);
     // third line of phase window
     sprintf(buffer, "elapsed time: %s", num_buffer);
     windowAddLine(p->w_phase, buffer);
@@ -247,13 +467,7 @@ void *show_routine(void *args)
     sprintf(buffer, "total study sessions: %i", p->study_phases);
     windowAddLine(p->w_total, buffer);
 
-    // second line of w_total
-    int total_studied = p->study_phases * STUDYDURATION;
-    // add current session to total time if it's a study session
-    if (p->current_phase->is_study)
-      total_studied += elapsed;
-
-    format_elapsed_time(total_studied, num_buffer);
+    format_elapsed_time(p->study_elapsed, num_buffer);
     sprintf(buffer, "total time studied: %s", num_buffer);
     windowAddLine(p->w_total, buffer);
 
@@ -264,7 +478,7 @@ void *show_routine(void *args)
     if (p->windows_force_reload)
     {
       // load quote
-      char b_quote[250], b_author[250];
+      char b_quote[BUFLEN], b_author[BUFLEN];
       get_random_quote(b_quote, b_author);
       // add quotes to window
       windowAddLine(p->w_quote, b_quote);
@@ -302,10 +516,21 @@ void *advance_routine(void *args)
   Parameters *p = args;
   while (loop)
   {
-    int elapsed_min;
+    int phase_elapsed;
     // calculate minutes elapsed
-    elapsed_min = (time(NULL) - p->current_phase->started) / 60;
-    if (elapsed_min > p->current_phase->duration)
+    phase_elapsed = (time(NULL) - p->current_phase->started);
+
+    // second line of w_total
+    int total_elapsed = p->study_phases * STUDYDURATION;
+    // add current session to total time if it's a study session
+    if (p->current_phase->is_study)
+      total_elapsed += phase_elapsed;
+
+    // update the parameters struct
+    p->phase_elapsed = phase_elapsed;
+    p->study_elapsed = total_elapsed;
+
+    if (phase_elapsed / 60 > p->current_phase->duration)
     {
       // one phase has been completed
       p->current_phase->completed++;
@@ -338,9 +563,22 @@ void *advance_routine(void *args)
       p->current_phase->started = time(NULL);
     }
 
-    msec_sleep(100);
+    msec_sleep(250);
   }
   pthread_exit(0);
+}
+
+/* Routing handling periodic saves. */
+void *save_routine(void *args)
+{
+  Parameters *p = args;
+  while (loop)
+  {
+    save_stats(p);
+    sec_sleep(5);
+  }
+
+  return 0;
 }
 
 int main()
@@ -352,8 +590,8 @@ int main()
 
   // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
-  pthread_t show_thread, advance_thread;
-  int show_return, advance_return;
+  pthread_t show_thread, advance_thread, save_thread;
+  int show_return, advance_return, save_return;
   Phase phases[3], *current_phase;
   Parameters *p;
   Window *w_phase, *w_total, *w_quote;
@@ -379,13 +617,8 @@ int main()
   windowSetTextStyle(w_quote, text_ITALIC);
 
   // pack the parameters
-  p = malloc(sizeof(Parameters));
-  p->current_phase = current_phase;
-  p->study_phases = 0;
-  p->windows_force_reload = 1;
-  p->w_phase = w_phase;
-  p->w_total = w_total;
-  p->w_quote = w_quote;
+  p = init_parameters(current_phase, w_phase, w_total, w_quote);
+  load_stats(p, phases);
 
   // prepare terminal
   clear_terminal();
@@ -393,9 +626,9 @@ int main()
   // spawn threads
   show_return = pthread_create(&show_thread, NULL, show_routine, (void *)p);
   advance_return = pthread_create(&advance_thread, NULL, advance_routine, (void *)p);
-
+  save_return = pthread_create(&save_thread, NULL, save_routine, (void *)p);
   // IDLE
-  while (loop || show_return != 0 || advance_return != 0)
+  while (loop || show_return != 0 || advance_return != 0 || save_return != 0)
   {
     msec_sleep(25);
   }
