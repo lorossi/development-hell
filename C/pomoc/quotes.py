@@ -1,5 +1,4 @@
 def main():
-
     with open("quotes-raw", "r") as f:
         raw_quotes = f.read().splitlines()
 
@@ -19,7 +18,7 @@ def main():
 
         quotes.append(line)
 
-    with open("src/include/QUOTES", "w") as f:
+    with open(".QUOTES", "w") as f:
         for line in quotes:
             f.write(f"{line}\n")
 
