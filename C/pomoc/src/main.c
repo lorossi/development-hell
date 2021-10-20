@@ -24,11 +24,11 @@ typedef struct phase
   struct phase *next_after;
 } Phase;
 
-typedef struct
+typedef struct parameters
 {
   Phase *current_phase;
   Window *w_phase, *w_total, *w_quote;
-  int study_phases;
+  int study_phases, windows_force_reload;
 } Parameters;
 
 const int STUDYDURATION = 45;
@@ -211,7 +211,6 @@ void get_random_quote(char *b_quote, char *b_author)
 /* Routine handling terminal output */
 void *show_routine(void *args)
 {
-  int first_iteration;
   Parameters *p = args;
   while (loop)
   {
@@ -262,8 +261,15 @@ void *show_routine(void *args)
     format_local_time(buffer);
     windowAddLine(p->w_total, buffer);
 
-    if (first_iteration)
+    if (p->windows_force_reload)
     {
+      // load quote
+      char b_quote[250], b_author[250];
+      get_random_quote(b_quote, b_author);
+      // add quotes to window
+      windowAddLine(p->w_quote, b_quote);
+      windowAddLine(p->w_quote, b_author);
+
       // set position of w_total
       windowAutoResize(p->w_phase); // trigger resize to get the actual width
       Position phase_br_corner = windowGetBottomRight(p->w_phase);
@@ -274,10 +280,10 @@ void *show_routine(void *args)
       Position total_br_corner = windowGetBottomRight(p->w_total);
       windowSetPosition(p->w_quote, X_BORDER, total_br_corner.y);
       windowSetSize(p->w_quote, total_br_corner.x - X_BORDER, 4);
-
+      // needs to be shown only once
       windowShow(p->w_quote);
-
-      first_iteration = 0;
+      // don't update again
+      p->windows_force_reload = 0;
     }
 
     // show windows
@@ -303,6 +309,8 @@ void *advance_routine(void *args)
     {
       // one phase has been completed
       p->current_phase->completed++;
+      // force windows reload
+      p->windows_force_reload = 1;
       // shall the phase count toward the maximum?
       if (p->current_phase->is_study)
       {
@@ -341,9 +349,6 @@ int main()
   loop = 1;
   // init random seed
   srand(time(NULL));
-  // load quote
-  char b_quote[250], b_author[250];
-  get_random_quote(b_quote, b_author);
 
   // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
@@ -371,13 +376,12 @@ int main()
   windowSetAutoWidth(w_quote, 0);
   windowSetPadding(w_quote, PADDING);
   windowSetFGcolor(w_quote, fg_BRIGHT_BLUE);
-  windowAddLine(w_quote, b_quote);
-  windowAddLine(w_quote, b_author);
 
   // pack the parameters
   p = malloc(sizeof(Parameters));
   p->current_phase = current_phase;
   p->study_phases = 0;
+  p->windows_force_reload = 1;
   p->w_phase = w_phase;
   p->w_total = w_total;
   p->w_quote = w_quote;

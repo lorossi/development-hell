@@ -14,12 +14,12 @@ def main():
             line = line.replace("  ", " ")
 
         line = line.replace("\"", "'")
-        line = line.replace(" –", "@")
+        line = line.replace(" –", "@~")
         line = line.strip()
 
         quotes.append(line)
 
-    with open("QUOTES", "w") as f:
+    with open("src/include/QUOTES", "w") as f:
         for line in quotes:
             f.write(f"{line}\n")
 
