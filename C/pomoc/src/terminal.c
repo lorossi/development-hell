@@ -46,6 +46,29 @@ double _min_3(double a, double b, double c)
   return _min(_min(a, b), c);
 }
 
+/* Private function. Find first space, going backwards, in a string. */
+int _findFirstSpace(char *s, int starting_pos, int ending_pos)
+{
+  int line_length = strlen(s);
+
+  if (starting_pos == -1 || starting_pos >= line_length)
+    starting_pos = line_length - 1;
+
+  if (ending_pos > starting_pos)
+    return -1;
+
+  if (ending_pos < 0)
+    ending_pos = 0;
+
+  for (int i = starting_pos - 1; i >= ending_pos; i--)
+  {
+    if (s[i] == ' ')
+      return starting_pos - i - 1;
+  }
+
+  return -1;
+}
+
 /* Private function. Calculates the width of a window. */
 int _windowCalculateLongestLine(Window *w)
 {
@@ -144,37 +167,51 @@ int _windowLinesWrap(Window *w)
 {
   int current = 0;
   const int width = w->size.width - 2 * w->padding;
-
+  // go over each line
   for (int i = 0; i < w->buffer_size; i++)
   {
     const int len = strlen(w->lines_buffer[i]);
-
+    // if the line is too long
     if (len > width)
     {
-      int current_len = 0;
-      while (current_len < len)
+      // break it into smaller parts
+      int current_pos = 0;
+      while (current_pos < len)
       {
-        int copy_size = width;
-        if (copy_size + current_len > len)
-          copy_size = len - current_len;
+        int delta_first_space, copy_size;
+        // check that the chunk is in bound of the string
 
-        strncpy(w->display_lines[current], w->lines_buffer[i] + current_len, copy_size);
+        delta_first_space = _findFirstSpace(w->lines_buffer[i], current_pos + width, current_pos);
+        copy_size = width - delta_first_space;
+
+        if (width < 0)
+          copy_size = width;
+
+        if (copy_size + current_pos > len)
+          copy_size = len - current_pos;
+
+        // copy to display lines
+        strncpy(w->display_lines[current], w->lines_buffer[i] + current_pos, copy_size);
+
         current++;
-        current_len += width;
+        current_pos += copy_size;
       }
     }
     else
     {
+      // simply copy into display line
       strcpy(w->display_lines[current], w->lines_buffer[i]);
       current++;
     }
   }
 
+  // check if the window has to be resized or some lines have to be hidden
   if (current > w->size.height - 2 && w->auto_height)
     w->size.height = current + 2;
   else if (w->size.height < current - 2)
     current = w->size.height - 2;
 
+  // update buffer size
   w->buffer_size = current;
   return current;
 }
