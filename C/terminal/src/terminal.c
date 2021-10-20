@@ -828,9 +828,9 @@ void windowShow(Window *w)
     _windowLinesUnbuffer(w);
 
   // set styles
+  set_textmode(w->text_style);
   set_fg(w->fg_color);
   set_bg(w->bg_color);
-  set_textmode(w->text_style);
 
   // draw outer border
   _windowDrawBorder(w);

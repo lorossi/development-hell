@@ -376,6 +376,7 @@ int main()
   windowSetAutoWidth(w_quote, 0);
   windowSetPadding(w_quote, PADDING);
   windowSetFGcolor(w_quote, fg_BRIGHT_BLUE);
+  windowSetTextStyle(w_quote, text_ITALIC);
 
   // pack the parameters
   p = malloc(sizeof(Parameters));
