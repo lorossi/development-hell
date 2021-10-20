@@ -49,15 +49,15 @@ static const style bg_BRIGHT_MAGENTA = 105;
 static const style bg_BRIGHT_CYAN = 106;
 static const style bg_BRIGHT_WHITE = 107;
 
-static const style BOLD = 1;
-static const style FAINT = 2;
-static const style ITALIC = 3;
-static const style UNDERLINE = 4;
-static const style BLINKING = 5;
-static const style REVERSE = 7;
-static const style HIDDEN = 8;
-static const style STRIKETHROUGH = 9;
-static const style TEXT_RESET = 0;
+static const style text_BOLD = 1;
+static const style text_FAINT = 2;
+static const style text_ITALIC = 3;
+static const style text_UNDERLINE = 4;
+static const style text_BLINKING = 5;
+static const style text_REVERSE = 7;
+static const style text_HIDDEN = 8;
+static const style text_STRIKETHROUGH = 9;
+static const style text_DEFAUlT = 0;
 
 #define ESCAPE "\x1b"
 #define CLEARALL ESCAPE "[2J"
@@ -103,6 +103,7 @@ typedef struct window
   int line_wrap;
   style fg_color;
   style bg_color;
+  style text_style;
   char lines_buffer[MAX_LINES][MAX_WIDTH];
   char display_lines[MAX_LINES][MAX_WIDTH];
   Rectangle size;
@@ -165,6 +166,7 @@ void windowSetLineWrap(Window *w, int line_wrap);
 void windowAutoResize(Window *w);
 void windowSetFGcolor(Window *w, style fg_color);
 void windowSetBGcolor(Window *w, style bg_color);
+void windowSetTextStyle(Window *w, style textstyle);
 int windowGetLines(Window *w);
 int windowAddLine(Window *w, char *line);
 int windowChangeLine(Window *w, char *line, int line_count);

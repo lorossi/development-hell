@@ -277,6 +277,7 @@ Window *createWindow(int x, int y)
       .line_wrap = 1,
       .fg_color = fg_DEFAULT,
       .bg_color = bg_DEFAULT,
+      .text_style = text_DEFAUlT,
       .size = size,
       .pos = pos,
   };
@@ -521,7 +522,7 @@ void reset_bg()
 /* Resets the text mode. */
 void reset_textmode()
 {
-  set_textmode(TEXT_RESET);
+  set_textmode(text_DEFAUlT);
 }
 
 /* Sets the foreground color of the text, according to the RGB values. */
@@ -742,6 +743,13 @@ void windowSetFGcolor(Window *w, style fg_color)
 void windowSetBGcolor(Window *w, style bg_color)
 {
   w->bg_color = bg_color;
+  return;
+}
+
+/* Sets window text style */
+void windowSetTextStyle(Window *w, style textstyle)
+{
+  w->text_style = textstyle;
   return;
 }
 
