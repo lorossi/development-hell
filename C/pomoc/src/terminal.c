@@ -830,6 +830,7 @@ void windowShow(Window *w)
   // set styles
   set_fg(w->fg_color);
   set_bg(w->bg_color);
+  set_textmode(w->text_style);
 
   // draw outer border
   _windowDrawBorder(w);
@@ -848,7 +849,7 @@ void windowShow(Window *w)
     printf("%s", w->display_lines[i]);
   }
 
-  reset_fg();
+  reset_styles();
   move_cursor_to(0, 0);
 }
 
