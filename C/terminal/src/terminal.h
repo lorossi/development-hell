@@ -101,6 +101,7 @@ typedef struct window
   int padding;
   int alignment;
   int line_wrap;
+  int visible;
   style fg_color;
   style bg_color;
   style text_style;
@@ -109,6 +110,11 @@ typedef struct window
   Rectangle size;
   Position pos;
 } Window;
+
+typedef struct dialog
+{
+  Window *window;
+} Dialog;
 
 // struct creation
 Rectangle createRectangle(int w, int h);
@@ -154,6 +160,7 @@ void deleteWindow(Window *w);
 void windowSetSize(Window *w, int width, int height);
 void windowSetWidth(Window *w, int width);
 void windowSetHeight(Window *w, int height);
+void windowSetVisibility(Window *w, int visibility);
 Rectangle windowGetSize(Window *w);
 void windowSetPosition(Window *w, int x, int y);
 Position windowGetPosition(Window *w);
@@ -175,4 +182,7 @@ int windowDeleteAllLines(Window *w);
 void windowShow(Window *w);
 void windowClear(Window *w);
 
+// dialog manipulation
+Dialog *createDialog(int border_x, int border_y);
+void deleteDialog(Dialog *d);
 #endif

@@ -460,9 +460,12 @@ void starry_night()
 
 int main()
 {
+
   enter_raw_mode();
   hide_cursor();
+  clear_terminal();
 
+#ifdef TESTS
   test_windows();
   await_keypress("\nPress a button to continue");
 
@@ -487,8 +490,16 @@ int main()
   starry_night();
   await_keypress("\nPress a button to continue");
 
+#else
+  Dialog *d = createDialog(2, 1);
+  windowShow(d->window);
+  await_keypress("");
+  deleteDialog(d);
+#endif
+
   show_cursor();
   exit_raw_mode();
   clear_terminal();
+
   return 0;
 }

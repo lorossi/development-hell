@@ -103,7 +103,7 @@ void _windowAutoHeight(Window *w)
 void _windowDrawBorder(Window *w)
 {
   const int width = w->size.width;
-  const int height = w->buffer_size + 2;
+  const int height = w->size.height;
 
   for (int x = 0; x < width; x++)
   {
@@ -140,6 +140,8 @@ void _windowDrawBorder(Window *w)
         printf("\u2502"); // vertical line
       }
     }
+
+    fflush(NULL);
   }
 }
 
@@ -261,16 +263,17 @@ Window *createWindow(int x, int y)
 {
   Position pos = createPosition(x, y);
   Rectangle size = createRectangle(1, 1);
-
-  Window *new = malloc(sizeof(Window));
-
-  *new = (Window){
+  // allocate space for window
+  Window *w = malloc(sizeof(Window));
+  // pack struct
+  *w = (Window){
       .auto_width = 1,
       .auto_height = 1,
       .buffer_size = 0,
       .padding = 1,
       .alignment = -1,
       .line_wrap = 1,
+      .visible = 1,
       .fg_color = fg_DEFAULT,
       .bg_color = bg_DEFAULT,
       .text_style = text_DEFAUlT,
@@ -278,7 +281,7 @@ Window *createWindow(int x, int y)
       .pos = pos,
   };
 
-  return new;
+  return w;
 }
 
 /* Deletes a Window. */
@@ -649,6 +652,15 @@ void windowSetHeight(Window *w, int height)
   return;
 }
 
+/* Sets visibility of a window. */
+void windowSetVisibility(Window *w, int visibility)
+{
+  if (visibility != 0 && visibility != 1)
+    return;
+
+  w->visible = visibility;
+}
+
 /* Gets window size. */
 Rectangle windowGetSize(Window *w)
 {
@@ -694,6 +706,15 @@ void windowSetAlignment(Window *w, int alignment)
 
   return;
 }
+/* Sets window auto size. Values: 1 for automatic sizing, 0 for manual sizing. */
+void windowSetAutoSize(Window *w, int auto_size)
+{
+  if (auto_size != 0 && auto_size != 1)
+    return;
+
+  w->auto_height = auto_size;
+  w->auto_width = auto_size;
+}
 
 /* Sets window auto width. Values: 1 for automatic width, 0 for manual sizing. */
 void windowSetAutoWidth(Window *w, int auto_size)
@@ -702,6 +723,15 @@ void windowSetAutoWidth(Window *w, int auto_size)
     return;
 
   w->auto_width = auto_size;
+}
+
+/* Sets window auto height. Values: 1 for automatic height, 0 for manual sizing. */
+void windowSetAutoHeight(Window *w, int auto_size)
+{
+  if (auto_size != 0 && auto_size != 1)
+    return;
+
+  w->auto_height = auto_size;
 }
 
 /* Sets window line wrap. Values: 1 for automatic wrapping, 0 for no wrapping. */
@@ -804,8 +834,8 @@ int windowDeleteAllLines(Window *w)
 /* Shows a window on the terminal. */
 void windowShow(Window *w)
 {
-  // no text, return
-  if (w->buffer_size == 0)
+  // hidden, return
+  if (!w->visible)
     return;
 
   // calculate longest line
@@ -859,4 +889,32 @@ void windowClear(Window *w)
 
   // clear window buffer
   _windowClearUnbuffered(w);
+}
+
+/* Creates a dialog window. */
+Dialog *createDialog(int border_x, int border_y)
+{
+  // get terminal size
+  Rectangle r = get_terminal_size();
+  // create a window
+  Window *w = createWindow(border_x, border_y);
+  // make it full screen
+  windowSetSize(w, r.width - 2 * border_x, r.height - 2 * border_y);
+  windowSetAutoSize(w, 0);
+  // allocate space for dialog
+  Dialog *d = malloc(sizeof(Window));
+  // pack struct
+  *d = (Dialog){
+      .window = w,
+  };
+
+  return d;
+}
+
+/* Deletes a dialog window. */
+void deleteDialog(Dialog *d)
+{
+  // free window
+  deleteWindow(d->window);
+  free(d);
 }
