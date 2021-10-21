@@ -13,7 +13,7 @@ void test_windows()
   windowAddLine(w_left, "LEFT");
   windowAddLine(w_left, "");
   windowAddLine(w_left, "TEXT");
-  showWindow(w_left);
+  windowShow(w_left);
 
   Window *w_center = createWindow(20, 1);
   windowSetAlignment(w_center, 0);
@@ -21,7 +21,7 @@ void test_windows()
   windowAddLine(w_center, "CENTER");
   windowAddLine(w_center, "");
   windowAddLine(w_center, "TEXT");
-  showWindow(w_center);
+  windowShow(w_center);
 
   Window *w_right = createWindow(40, 1);
   windowSetPadding(w_right, 1);
@@ -29,7 +29,7 @@ void test_windows()
   windowAddLine(w_right, "RIGHT");
   windowAddLine(w_right, "");
   windowAddLine(w_right, "TEXT");
-  showWindow(w_right);
+  windowShow(w_right);
 
   Window *w_wide = createWindow(10, 10);
   windowAddLine(w_wide, "VERY VERY VERY VERY VERY LONG WINDOW");
@@ -38,12 +38,12 @@ void test_windows()
   windowSetAlignment(w_wide, 0);
   windowSetSize(w_wide, 50, 5);
   windowSetAlignment(w_wide, 0);
-  showWindow(w_wide);
+  windowShow(w_wide);
 
   move_cursor_to_bottom();
   await_keypress("\nPress a button to continue");
 
-  clearWindow(w_wide);
+  windowClear(w_wide);
   deleteWindow(w_wide);
   deleteWindow(w_left);
   deleteWindow(w_center);
@@ -207,36 +207,36 @@ void test_textmodes()
   reset_styles();
   clear_terminal();
 
-  set_textmode(BOLD);
+  set_textmode(text_BOLD);
   printf("BOLD TEXT\n");
   reset_textmode();
 
-  set_textmode(FAINT);
+  set_textmode(text_FAINT);
   printf("FAINT TEXT\n");
   reset_textmode();
 
-  set_textmode(ITALIC);
+  set_textmode(text_ITALIC);
   printf("ITALIC TEXT\n");
   reset_textmode();
 
-  set_textmode(UNDERLINE);
+  set_textmode(text_UNDERLINE);
   printf("UNDERLINE TEXT\n");
   reset_textmode();
 
-  set_textmode(BLINKING);
+  set_textmode(text_BLINKING);
   printf("BLINKING TEXT\n");
   reset_textmode();
 
-  set_textmode(REVERSE);
+  set_textmode(text_REVERSE);
   printf("REVERSE TEXT\n");
   reset_textmode();
 
-  set_textmode(HIDDEN);
+  set_textmode(text_HIDDEN);
   printf("HIDDEN TEXT");
   reset_textmode();
   printf(" (hidden) \n");
 
-  set_textmode(STRIKETHROUGH);
+  set_textmode(text_STRIKETHROUGH);
   printf("STRIKETHROUGH TEXT\n");
   reset_textmode();
 
@@ -251,15 +251,15 @@ void test_mixed()
   move_cursor_to(0, 0);
 
   reset_styles();
-  set_styles(3, BOLD, fg_RED, bg_BRIGHT_WHITE);
+  set_styles(3, text_BOLD, fg_RED, bg_BRIGHT_WHITE);
   printf("Italic, red on bright white\n");
 
   reset_styles();
-  set_styles(4, FAINT, ITALIC, fg_YELLOW, bg_BRIGHT_CYAN);
+  set_styles(4, text_FAINT, text_ITALIC, fg_YELLOW, bg_BRIGHT_CYAN);
   printf("Faint italic, yellow on bright cyan\n");
 
   reset_styles();
-  set_styles(4, fg_BRIGHT_YELLOW, bg_BRIGHT_GREEN, BLINKING, UNDERLINE);
+  set_styles(4, fg_BRIGHT_YELLOW, bg_BRIGHT_GREEN, text_BLINKING, text_UNDERLINE);
   printf("Blinking underlined, bright yellow on bright green\n");
 
   reset_styles();
@@ -440,16 +440,16 @@ void starry_night()
   reset_styles();
   set_bg_RGB(sky_color);
   set_fg_RGB(star_color);
-  set_textmode(BOLD);
-  set_textmode(BLINKING);
+  set_textmode(text_BOLD);
+  set_textmode(text_BLINKING);
 
   clear_terminal();
 
   srand(time(NULL));
   for (int i = 0; i < 25; i++)
   {
-    int x = rand() % size.w;
-    int y = rand() % size.h;
+    int x = rand() % size.width;
+    int y = rand() % size.height;
     move_cursor_to(x, y);
     printf("*");
   }
@@ -488,7 +488,7 @@ int main()
   await_keypress("\nPress a button to continue");
 
   show_cursor();
-  exit_raw_move();
+  exit_raw_mode();
   clear_terminal();
   return 0;
 }

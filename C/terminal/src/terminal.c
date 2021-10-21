@@ -452,7 +452,7 @@ Rectangle get_terminal_size()
 /* Moves cursor to x, y coordinates (zero-indexed). */
 void move_cursor_to(int x, int y)
 {
-  printf(ESCAPE "[%i;%iH", y, x);
+  printf(ESCAPE "[%i;%iH", y + 1, x + 1);
   return;
 };
 
@@ -858,7 +858,7 @@ void windowClear(Window *w)
 {
   reset_bg();
   for (int y = 0; y < w->size.height; y++)
-    erase_at(w->pos.x, y + w->pos.y, w->size.width);
+    erase_at(w->pos.x, y + w->pos.y - 1, w->size.width);
 
   // clear window buffer
   _windowClearUnbuffered(w);
