@@ -427,6 +427,9 @@ int load_stats(Parameters *p, Phase *phases)
   // update the parameters struct
   p->current_phase->started = atoi(r_buffer);
 
+  // force reload
+  p->windows_force_reload = 1;
+
   return 0;
 }
 
