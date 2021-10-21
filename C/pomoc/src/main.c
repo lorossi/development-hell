@@ -30,12 +30,13 @@ typedef struct phase
 
 typedef struct parameters
 {
-  Phase *current_phase;                // current phase of the timer
-  Window *w_phase, *w_total, *w_quote; // displayed windows
-  int study_phases;                    // amount of currently studied phases
-  int windows_force_reload;            // flag to force redraw of the windows
-  int phase_elapsed;                   // total time elapsed in the current phase
-  int study_elapsed;                   // total time studied in the session
+  Phase *current_phase;                         // current phase of the timer
+  Window *w_phase, *w_total, *w_quote;          // displayed windows
+  int show_return, advance_return, save_return; // return values of threads
+  int study_phases;                             // amount of currently studied phases
+  int windows_force_reload;                     // flag to force redraw of the windows
+  int phase_elapsed;                            // total time elapsed in the current phase
+  int study_elapsed;                            // total time studied in the session
 } Parameters;
 
 const int STUDYDURATION = 45;
@@ -46,6 +47,8 @@ const int X_BORDER = 2;
 const int Y_BORDER = 1;
 const int PADDING = 2;
 const int BUFLEN = 250;
+const int SAVEINTERVAL = 300;
+const int SLEEP_INTERVAL = 50;
 
 volatile int loop;
 
@@ -173,6 +176,9 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->w_phase = w_phase;
   p->w_total = w_total;
   p->w_quote = w_quote;
+  p->show_return = 1;
+  p->advance_return = 1;
+  p->save_return = 1;
 
   return p;
 }
@@ -508,8 +514,9 @@ void *show_routine(void *args)
     windowShow(p->w_total);
 
     // idle
-    msec_sleep(50);
+    msec_sleep(SLEEP_INTERVAL);
   }
+  p->show_return = 0;
   pthread_exit(0);
 }
 
@@ -566,8 +573,9 @@ void *advance_routine(void *args)
       p->current_phase->started = time(NULL);
     }
 
-    msec_sleep(250);
+    msec_sleep(SLEEP_INTERVAL);
   }
+  p->advance_return = 0;
   pthread_exit(0);
 }
 
@@ -575,13 +583,20 @@ void *advance_routine(void *args)
 void *save_routine(void *args)
 {
   Parameters *p = args;
+  time_t last_save = 0;
   while (loop)
   {
-    save_stats(p);
-    sec_sleep(5);
+
+    if (time(NULL) - last_save > SAVEINTERVAL)
+    {
+      save_stats(p);
+      last_save = time(NULL);
+    }
+    msec_sleep(SLEEP_INTERVAL);
   }
 
-  return 0;
+  p->save_return = 0;
+  pthread_exit(0);
 }
 
 int main()
@@ -594,7 +609,6 @@ int main()
   // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
   pthread_t show_thread, advance_thread, save_thread;
-  int show_return, advance_return, save_return;
   Phase phases[3], *current_phase;
   Parameters *p;
   Window *w_phase, *w_total, *w_quote;
@@ -627,17 +641,21 @@ int main()
   clear_terminal();
   hide_cursor();
   // spawn threads
-  show_return = pthread_create(&show_thread, NULL, show_routine, (void *)p);
-  advance_return = pthread_create(&advance_thread, NULL, advance_routine, (void *)p);
-  save_return = pthread_create(&save_thread, NULL, save_routine, (void *)p);
-  // IDLE
-  while (loop || show_return != 0 || advance_return != 0 || save_return != 0)
+  pthread_create(&show_thread, NULL, show_routine, (void *)p);
+  pthread_create(&advance_thread, NULL, advance_routine, (void *)p);
+  pthread_create(&save_thread, NULL, save_routine, (void *)p);
+
+  // Main thread IDLE
+  while (loop || p->show_return > 0 || p->advance_return > 0 || p->save_return > 0)
   {
     msec_sleep(25);
   }
 
   // clean up
   free(p);
+  deleteWindow(w_phase);
+  deleteWindow(w_total);
+  deleteWindow(w_quote);
   // reset all terminal
   reset_styles();
   clear_terminal();

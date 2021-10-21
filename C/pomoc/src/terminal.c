@@ -88,19 +88,15 @@ int _windowCalculateLongestLine(Window *w)
 /* Private function. Auto resize a window width. */
 void _windowAutoWidth(Window *w, int longest)
 {
-  if (longest % 2 == 1 && w->alignment == 0)
-  {
-    // fix spacing in centering when the length of the longest string is odd
-    longest++;
-  }
-
   w->size.width = longest + 2 + w->padding * 2;
+  return;
 }
 
 /* Private function. Auto resize a window height. */
 void _windowAutoHeight(Window *w)
 {
   w->size.height = w->buffer_size + 2;
+  return;
 }
 
 /* Private function. Draw window border. */
@@ -288,7 +284,8 @@ Window *createWindow(int x, int y)
 /* Deletes a Window. */
 void deleteWindow(Window *w)
 {
-  free(w);
+  if (w)
+    free(w);
   return;
 }
 
@@ -858,7 +855,7 @@ void windowClear(Window *w)
 {
   reset_bg();
   for (int y = 0; y < w->size.height; y++)
-    erase_at(w->pos.x, y + w->pos.y, w->size.width);
+    erase_at(w->pos.x, y + w->pos.y - 1, w->size.width);
 
   // clear window buffer
   _windowClearUnbuffered(w);
