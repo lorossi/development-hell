@@ -3,19 +3,33 @@
 #include <stdlib.h> // for random values
 #include <stdio.h>  // for I/O operations
 
+// #define TESTS
+#define DIALOG
+
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)     \
+  (byte & 0x80 ? '1' : '0'),     \
+      (byte & 0x40 ? '1' : '0'), \
+      (byte & 0x20 ? '1' : '0'), \
+      (byte & 0x10 ? '1' : '0'), \
+      (byte & 0x08 ? '1' : '0'), \
+      (byte & 0x04 ? '1' : '0'), \
+      (byte & 0x02 ? '1' : '0'), \
+      (byte & 0x01 ? '1' : '0')
+
 void test_windows()
 {
   reset_styles();
   clear_terminal();
 
-  Window *w_left = createWindow(1, 1);
+  Window *w_left = createWindow(1, 2);
   windowSetPadding(w_left, 1);
   windowAddLine(w_left, "LEFT");
   windowAddLine(w_left, "");
   windowAddLine(w_left, "TEXT");
   windowShow(w_left);
 
-  Window *w_center = createWindow(20, 1);
+  Window *w_center = createWindow(20, 2);
   windowSetAlignment(w_center, 0);
   windowSetPadding(w_center, 2);
   windowAddLine(w_center, "CENTER");
@@ -23,7 +37,7 @@ void test_windows()
   windowAddLine(w_center, "TEXT");
   windowShow(w_center);
 
-  Window *w_right = createWindow(40, 1);
+  Window *w_right = createWindow(40, 2);
   windowSetPadding(w_right, 1);
   windowSetAlignment(w_right, 1);
   windowAddLine(w_right, "RIGHT");
@@ -263,6 +277,10 @@ void test_mixed()
   printf("Blinking underlined, bright yellow on bright green\n");
 
   reset_styles();
+  set_styles(5, fg_BRIGHT_GREEN, bg_BRIGHT_BLUE, text_UNDERLINE, text_BOLD, text_STRIKETHROUGH);
+  printf("Bold, underlined, strikethrough, bright green on bright blue\n");
+
+  reset_styles();
 }
 
 void test_RGB()
@@ -458,6 +476,34 @@ void starry_night()
   reset_styles();
 }
 
+void dialog()
+{
+  clear_terminal();
+
+  Dialog *d = createDialog(8, 4);
+  dialogSetPadding(d, 4);
+  dialogSetText(d, "Previous session found. Continue?", 1);
+  dialogShow(d);
+  dialogWaitResponse(d);
+  dialogClear(d);
+  deleteDialog(d);
+  move_cursor_to(0, 0);
+}
+
+void special_keypress()
+{
+  char special;
+
+  while (1)
+  {
+    special = poll_special_keypress();
+    if (special & 0b10000000) // backspace
+      break;
+    else if (special)
+      printf(BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(special));
+  }
+}
+
 int main()
 {
 
@@ -465,7 +511,6 @@ int main()
   hide_cursor();
   clear_terminal();
 
-#ifdef TESTS
   test_windows();
   await_keypress("\nPress a button to continue");
 
@@ -490,12 +535,8 @@ int main()
   starry_night();
   await_keypress("\nPress a button to continue");
 
-#else
-  Dialog *d = createDialog(2, 1);
-  windowShow(d->window);
-  await_keypress("");
-  deleteDialog(d);
-#endif
+  dialog();
+  await_keypress("\nPress a button to continue");
 
   show_cursor();
   exit_raw_mode();

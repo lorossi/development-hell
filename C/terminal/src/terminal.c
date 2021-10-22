@@ -63,7 +63,7 @@ int _findFirstSpace(char *s, int starting_pos, int ending_pos)
   for (int i = starting_pos - 1; i >= ending_pos; i--)
   {
     if (s[i] == ' ')
-      return starting_pos - i - 1;
+      return i;
   }
 
   return -1;
@@ -105,9 +105,9 @@ void _windowDrawBorder(Window *w)
   const int width = w->size.width;
   const int height = w->size.height;
 
-  for (int x = 0; x < width; x++)
+  for (int y = 0; y < height; y++)
   {
-    for (int y = 0; y < height; y++)
+    for (int x = 0; x < width; x++)
     {
       if (y == 0)
       {
@@ -140,8 +140,6 @@ void _windowDrawBorder(Window *w)
         printf("\u2502"); // vertical line
       }
     }
-
-    fflush(NULL);
   }
 }
 
@@ -176,14 +174,13 @@ int _windowLinesWrap(Window *w)
       int current_pos = 0;
       while (current_pos < len)
       {
-        int delta_first_space, copy_size;
+        int first_space, copy_size;
         // check that the chunk is in bound of the string
+        first_space = _findFirstSpace(w->lines_buffer[i], current_pos + width, current_pos);
+        copy_size = first_space - current_pos;
 
-        delta_first_space = _findFirstSpace(w->lines_buffer[i], current_pos + width, current_pos);
-        copy_size = width - delta_first_space;
-
-        if (width < 0)
-          copy_size = width;
+        if (copy_size <= 0)
+          copy_size = len;
 
         if (copy_size + current_pos > len)
           copy_size = len - current_pos;
@@ -209,8 +206,12 @@ int _windowLinesWrap(Window *w)
   else if (w->size.height < current - 2)
     current = w->size.height - 2;
 
-  // update buffer size
   w->buffer_size = current;
+
+  // copy back into display lines to prevent double wrapping
+  for (int i = 0; i < w->buffer_size; i++)
+    strcpy(w->lines_buffer[i], w->display_lines[i]);
+
   return current;
 }
 
@@ -371,6 +372,7 @@ void clear_terminal()
 {
   printf(CLEARALL);
   printf(MOVEHOME);
+
   return;
 };
 
@@ -385,6 +387,7 @@ void hide_cursor()
   tcsetattr(0, 0, &term);
 
   printf(HIDECURSOR);
+  fflush(STDIN_FILENO);
 
   return;
 }
@@ -452,7 +455,7 @@ Rectangle get_terminal_size()
 /* Moves cursor to x, y coordinates (zero-indexed). */
 void move_cursor_to(int x, int y)
 {
-  printf(ESCAPE "[%i;%iH", y, x);
+  printf(ESCAPE "[%i;%iH", y, x + 1);
   return;
 };
 
@@ -556,6 +559,7 @@ void write_at(int x, int y, char *s)
 {
   move_cursor_to(x, y);
   printf(s);
+
   return;
 };
 
@@ -567,19 +571,106 @@ void erase_at(int x, int y, int length)
     move_cursor_to(x + i, y);
     printf(" ");
   }
+
   return;
 }
 
-/* Polls a keypress. Returns the number of read bytes. The keystroke is placed into buffer. */
-int poll_keypress(char *buffer)
+/* Polls a keypress. Returns the code corresponding to the key. */
+char poll_keypress()
 {
-  int read_bytes;
+  char buf;
   enter_raw_mode();
-  read_bytes = read(0, buffer, 100);
-  exit_raw_mode();
-  fflush(NULL);
 
-  return read_bytes;
+  if (read(0, &buf, 1) == 0)
+    buf = 0;
+
+  exit_raw_mode();
+
+  return buf;
+}
+
+/* Polls special key presses. Return value: the 8 lsb represent (from left to right):
+BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP */
+char poll_special_keypress()
+{
+  char key;
+  char pressed, status;
+  // to catch arrrow keypressed we need to read 3 characters
+  // 2 delimiters and 1 for the actual button
+  // implemented as a simple FSM
+  // the 8 lsb represent (from left to right)
+  // BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP pressed.
+  pressed = 0;
+  status = 0;
+  while ((key = poll_keypress()) > 0)
+  {
+    if (key == 27)
+    {
+      // first step of the FSM
+      // first escape character found
+      status |= 0b00000001;
+    }
+    else if (key == 91 && status & 0b00000001)
+    {
+      // second step of the FSM
+      // second escape character found
+      status |= 0b00000010;
+    }
+    else if (key >= 65 && key <= 68 && status & 0b00000010)
+    {
+      // last step of the FSM
+      // key character found
+      switch (key)
+      {
+      case 65:
+        pressed |= 0b00000001; // up
+        break;
+      case 66:
+        pressed |= 0b00000010; // down
+        break;
+      case 67:
+        pressed |= 0b00000100; // left
+        break;
+      case 68:
+        pressed |= 0b00001000; // right
+        break;
+
+      default:
+        break;
+      }
+
+      pressed &= 0b00001111;
+      status &= 0b11110000;
+    }
+    else
+    {
+      // some keys are not escaped
+      status = 0;
+      switch (key)
+      {
+      case 9:
+        pressed |= 0b00010000; // tab
+        break;
+      case 10:
+        pressed |= 0b00100000; // enter
+        break;
+      case 32:
+        pressed |= 0b01000000; // space bar
+        break;
+      case 127:
+        pressed |= 0b10000000; // backspace
+        break;
+      default:
+        break;
+      }
+    }
+
+    // if either key was found, return
+    if (pressed)
+      break;
+  }
+
+  return pressed;
 }
 
 /* Awaits a keypress. A message is prompted on the terminal. Pass NULL to skip. */
@@ -589,12 +680,12 @@ int await_keypress(char *s)
     printf("%s", s);
 
   int read_bytes;
-  char *buffer[4];
+  char *buffer[1];
 
   enter_raw_mode();
   do
   {
-    read_bytes = read(0, buffer, 4);
+    read_bytes = read(0, buffer, 1);
   } while (read_bytes == 0);
   exit_raw_mode();
 
@@ -855,12 +946,15 @@ void windowShow(Window *w)
     _windowLinesUnbuffer(w);
 
   // set styles
-  set_textmode(w->text_style);
   set_fg(w->fg_color);
   set_bg(w->bg_color);
 
   // draw outer border
   _windowDrawBorder(w);
+  fflush(NULL);
+
+  // set text style
+  set_textmode(w->text_style);
 
   for (int i = 0; i < w->buffer_size; i++)
   {
@@ -874,6 +968,7 @@ void windowShow(Window *w)
     // draw text
     move_cursor_to(lx, ly);
     printf("%s", w->display_lines[i]);
+    fflush(NULL);
   }
 
   reset_styles();
@@ -885,27 +980,53 @@ void windowClear(Window *w)
 {
   reset_bg();
   for (int y = 0; y < w->size.height; y++)
-    erase_at(w->pos.x, y + w->pos.y - 1, w->size.width);
+    erase_at(w->pos.x, y + w->pos.y, w->size.width);
 
   // clear window buffer
   _windowClearUnbuffered(w);
 }
 
 /* Creates a dialog window. */
-Dialog *createDialog(int border_x, int border_y)
+Dialog *createDialog(int x, int y)
 {
+  int width, height;
   // get terminal size
   Rectangle r = get_terminal_size();
+  // calculate size
+  width = _min(DIALOG_MAX_WIDTH, r.width);
+  height = _min(DIALOG_MAX_HEIGHT, r.height);
+  // calculate border
   // create a window
-  Window *w = createWindow(border_x, border_y);
-  // make it full screen
-  windowSetSize(w, r.width - 2 * border_x, r.height - 2 * border_y);
+  Window *w = createWindow(x, y);
+  // manual size it
+  windowSetSize(w, width, height);
   windowSetAutoSize(w, 0);
+
+  // create buttons
+  Window *b1, *b2;
+  b1 = createWindow(x + 4, y - 4 + height);
+  b2 = createWindow(x - 11 - 4 + width, y - 4 + height);
+  // disable auto size
+  windowSetAutoWidth(b1, 0);
+  windowSetAutoWidth(b2, 0);
+  // set width
+  windowSetWidth(b1, 11);
+  windowSetWidth(b2, 11);
+  // set alignment
+  windowSetAlignment(b1, 0);
+  windowSetAlignment(b2, 0);
+  windowSetAlignment(w, 0);
+  // add labels
+  windowAddLine(b1, "  NAY  ");
+  windowAddLine(b2, "  AYE  ");
+
   // allocate space for dialog
   Dialog *d = malloc(sizeof(Window));
   // pack struct
   *d = (Dialog){
       .window = w,
+      .buttons = {b1, b2},
+      .active_button = 0,
   };
 
   return d;
@@ -916,5 +1037,71 @@ void deleteDialog(Dialog *d)
 {
   // free window
   deleteWindow(d->window);
+  // free buttons
+  for (int i = 0; i < 2; i++)
+    deleteWindow(d->buttons[i]);
   free(d);
+}
+
+/* Show a dialog */
+void dialogShow(Dialog *d)
+{
+  windowShow(d->window);
+
+  for (int i = 0; i < 2; i++)
+  {
+    windowSetTextStyle(d->buttons[i], i == d->active_button ? text_REVERSE : text_DEFAUlT);
+    windowShow(d->buttons[i]);
+  }
+}
+
+/* Hides a dialog */
+void dialogClear(Dialog *d)
+{
+  windowClear(d->window);
+
+  for (int i = 0; i < 2; i++)
+    windowClear(d->buttons[i]);
+}
+
+/* Sets dialog padding. */
+void dialogSetPadding(Dialog *d, int padding)
+{
+  if (padding > 0)
+    d->window->padding = padding;
+
+  return;
+}
+
+/* Sets dialog text. */
+void dialogSetText(Dialog *d, char *text, int v_padding)
+{
+  windowDeleteAllLines(d->window);
+
+  for (int i = 0; i < v_padding; i++)
+    windowAddLine(d->window, "");
+
+  windowAddLine(d->window, text);
+  return;
+}
+
+int dialogWaitResponse(Dialog *d)
+{
+  while (1)
+  {
+
+    int special = poll_special_keypress();
+
+    if (special & 0b00000100) // left
+      d->active_button = 1;
+    else if (special & 0b00001000) // right
+      d->active_button = 0;
+    else if (special & 0b00010000) // tab
+      d->active_button = !d->active_button;
+    else if (special & 0b00100000) // enter
+      return d->active_button;
+
+    if (special)
+      dialogShow(d);
+  }
 }
