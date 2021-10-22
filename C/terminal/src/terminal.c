@@ -954,10 +954,9 @@ void windowShow(Window *w)
   fflush(NULL);
 
   // set text style
-  set_textmode(w->text_style);
-  // set styles
-  set_fg(w->fg_color);
-  set_bg(w->bg_color);
+  // prevent complete reset
+  if (w->text_style != text_DEFAUlT)
+    set_textmode(w->text_style);
 
   for (int i = 0; i < w->buffer_size; i++)
   {
