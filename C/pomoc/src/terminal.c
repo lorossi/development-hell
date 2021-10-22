@@ -384,10 +384,10 @@ void hide_cursor()
   struct termios term;
   tcgetattr(0, &term);
   term.c_lflag &= ~ECHO;
-  tcsetattr(0, 0, &term);
+  tcsetattr(0, TCSANOW, &term);
 
   printf(HIDECURSOR);
-  fflush(STDIN_FILENO);
+  fflush(NULL);
 
   return;
 }
@@ -399,9 +399,10 @@ void show_cursor()
   struct termios term;
   tcgetattr(0, &term);
   term.c_lflag |= ECHO;
-  tcsetattr(0, 0, &term);
+  tcsetattr(0, TCSANOW, &term);
 
   printf(SHOWCURSOR);
+  fflush(NULL);
 
   return;
 }
@@ -415,6 +416,7 @@ void enter_raw_mode()
   raw.c_cc[VTIME] = 0;
   raw.c_cc[VMIN] = 0;
   tcsetattr(0, TCSANOW, &raw);
+  fflush(NULL);
 }
 
 /* Leaves terminal raw mode. */
@@ -426,6 +428,7 @@ void exit_raw_mode()
   raw.c_cc[VTIME] = 0;
   raw.c_cc[VMIN] = 1;
   tcsetattr(0, TCSANOW, &raw);
+  fflush(NULL);
 }
 
 /* Moves the cursor to the bottom of the screen. */
@@ -456,6 +459,8 @@ Rectangle get_terminal_size()
 void move_cursor_to(int x, int y)
 {
   printf(ESCAPE "[%i;%iH", y, x + 1);
+  fflush(NULL);
+
   return;
 };
 
@@ -669,6 +674,9 @@ char poll_special_keypress()
     if (pressed)
       break;
   }
+
+  // hide cursor again
+  hide_cursor();
 
   return pressed;
 }
@@ -917,6 +925,9 @@ int windowDeleteLine(Window *w, int line_count)
 /* Deletes a all the lines of text in the window. Returns -1 in case of error. */
 int windowDeleteAllLines(Window *w)
 {
+  for (int i = 0; i < w->buffer_size; i++)
+    strcpy(w->lines_buffer[i], "");
+
   w->buffer_size = 0;
 
   return 0;
