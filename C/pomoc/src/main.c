@@ -358,13 +358,12 @@ int save_stats(Parameters *p)
   return 0;
 }
 
-/* Loads stats from file. */
-int load_stats(Parameters *p, Phase *phases)
+/* Checks if a save from today is already present */
+int check_save()
 {
   FILE *fp;
   char buffer[BUFLEN];
   char r_buffer[BUFLEN];
-  int num_buffer;
 
   fp = fopen(SAVE_PATH, "r");
   if (fp == NULL)
@@ -377,11 +376,29 @@ int load_stats(Parameters *p, Phase *phases)
   // format current date
   format_date(buffer);
 
-  // if date from file and current date are different,
-  // then return as the save file is not significative for
-  // the current session
   if (strcmp(buffer, r_buffer) != 0)
     return 0;
+
+  return 1;
+}
+/* Loads stats from file. */
+int load_save(Parameters *p, Phase *phases)
+{
+  FILE *fp;
+  char r_buffer[BUFLEN];
+  int num_buffer;
+
+  // if the save is not from today, return
+  if (check_save() == -1)
+    return 0;
+
+  fp = fopen(SAVE_PATH, "r");
+  if (fp == NULL)
+    return -1;
+
+  // read date, discarding first line
+  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+    return -1;
 
   // read phase elapsed
   if (file_read_line(r_buffer, BUFLEN, fp) == -1)
@@ -635,11 +652,30 @@ int main()
 
   // pack the parameters
   p = init_parameters(current_phase, w_phase, w_total, w_quote);
-  load_stats(p, phases);
 
   // prepare terminal
   clear_terminal();
   hide_cursor();
+
+  // check if a previous file session is available
+  if (check_save())
+  {
+    Dialog *d;
+    int ret;
+
+    d = createDialog(X_BORDER, Y_BORDER);
+
+    dialogSetPadding(d, 4);
+    dialogSetText(d, "Previous session found. Continue?", 1);
+    dialogShow(d);
+    ret = dialogWaitResponse(d);
+    dialogClear(d);
+    deleteDialog(d);
+    if (ret)
+      // load stats from file
+      load_save(p, phases);
+  }
+
   // spawn threads
   pthread_create(&show_thread, NULL, show_routine, (void *)p);
   pthread_create(&advance_thread, NULL, advance_routine, (void *)p);
