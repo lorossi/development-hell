@@ -955,6 +955,9 @@ void windowShow(Window *w)
 
   // set text style
   set_textmode(w->text_style);
+  // set styles
+  set_fg(w->fg_color);
+  set_bg(w->bg_color);
 
   for (int i = 0; i < w->buffer_size; i++)
   {
