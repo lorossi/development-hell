@@ -30,13 +30,13 @@ typedef struct phase
 
 typedef struct parameters
 {
-  Phase *current_phase;                         // current phase of the timer
-  Window *w_phase, *w_total, *w_quote;          // displayed windows
-  int show_return, advance_return, save_return; // return values of threads
-  int study_phases;                             // amount of currently studied phases
-  int windows_force_reload;                     // flag to force redraw of the windows
-  int phase_elapsed;                            // total time elapsed in the current phase
-  int study_elapsed;                            // total time studied in the session
+  Phase *current_phase;                      // current phase of the timer
+  Window *w_phase, *w_total, *w_quote;       // displayed windows
+  int show_r, advance_r, save_r, keypress_r; // return values of threads
+  int study_phases;                          // amount of currently studied phases
+  int windows_force_reload;                  // flag to force redraw of the windows
+  int phase_elapsed;                         // total time elapsed in the current phase
+  int study_elapsed;                         // total time studied in the session
 } Parameters;
 
 const int STUDYDURATION = 45;
@@ -51,6 +51,7 @@ const int SAVEINTERVAL = 300;
 const int SLEEP_INTERVAL = 50;
 
 volatile int loop;
+volatile int sigint_called;
 
 int file_read_line(char *buffer, int max_bytes, FILE *fp)
 {
@@ -90,8 +91,7 @@ int file_count_lines(FILE *fp)
 
 void SIGINT_handler()
 {
-  // stop loop
-  loop = 0;
+  sigint_called = 1;
   return;
 }
 
@@ -176,9 +176,10 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->w_phase = w_phase;
   p->w_total = w_total;
   p->w_quote = w_quote;
-  p->show_return = 1;
-  p->advance_return = 1;
-  p->save_return = 1;
+  p->show_r = 1;
+  p->advance_r = 1;
+  p->save_r = 1;
+  p->keypress_r = 1;
 
   return p;
 }
@@ -506,6 +507,8 @@ void *show_routine(void *args)
       // load quote
       char b_quote[BUFLEN], b_author[BUFLEN];
       get_random_quote(b_quote, b_author);
+      // reset quotes window
+      windowDeleteAllLines(p->w_quote);
       // add quotes to window
       windowAddLine(p->w_quote, b_quote);
       windowAddLine(p->w_quote, b_author);
@@ -530,10 +533,12 @@ void *show_routine(void *args)
     windowShow(p->w_phase);
     windowShow(p->w_total);
 
+    move_cursor_to(0, 0);
+
     // idle
     msec_sleep(SLEEP_INTERVAL);
   }
-  p->show_return = 0;
+  p->show_r = 0;
   pthread_exit(0);
 }
 
@@ -592,7 +597,7 @@ void *advance_routine(void *args)
 
     msec_sleep(SLEEP_INTERVAL);
   }
-  p->advance_return = 0;
+  p->advance_r = 0;
   pthread_exit(0);
 }
 
@@ -612,7 +617,53 @@ void *save_routine(void *args)
     msec_sleep(SLEEP_INTERVAL);
   }
 
-  p->save_return = 0;
+  p->save_r = 0;
+  pthread_exit(0);
+}
+
+/* Routine handling keypresses */
+void *keypress_routine(void *args)
+{
+  Parameters *p = args;
+  while (loop)
+  {
+    if (sigint_called)
+    {
+      sigint_called = 0;
+      p->w_phase->visible = 0;
+      p->w_total->visible = 0;
+      p->w_quote->visible = 0;
+
+      clear_terminal();
+
+      Dialog *d;
+      int ret;
+
+      d = createDialog(X_BORDER, Y_BORDER);
+      dialogSetPadding(d, 4);
+      dialogSetText(d, "Exit pomodoro?", 1);
+      dialogShow(d);
+      ret = dialogWaitResponse(d);
+      dialogClear(d);
+      deleteDialog(d);
+
+      if (ret == 1)
+      {
+        loop = 0;
+      }
+      else
+      {
+        p->w_phase->visible = 1;
+        p->w_total->visible = 1;
+        p->w_quote->visible = 1;
+        p->windows_force_reload = 1;
+      }
+    }
+
+    msec_sleep(SLEEP_INTERVAL);
+  }
+
+  p->keypress_r = 0;
   pthread_exit(0);
 }
 
@@ -620,12 +671,13 @@ int main()
 {
   //start the loop
   loop = 1;
+  sigint_called = 0;
   // init random seed
   srand(time(NULL));
 
   // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
-  pthread_t show_thread, advance_thread, save_thread;
+  pthread_t show_thread, advance_thread, save_thread, keypress_thread;
   Phase phases[3], *current_phase;
   Parameters *p;
   Window *w_phase, *w_total, *w_quote;
@@ -664,13 +716,13 @@ int main()
     int ret;
 
     d = createDialog(X_BORDER, Y_BORDER);
-
     dialogSetPadding(d, 4);
     dialogSetText(d, "Previous session found. Continue?", 1);
     dialogShow(d);
     ret = dialogWaitResponse(d);
     dialogClear(d);
     deleteDialog(d);
+
     if (ret)
       // load stats from file
       load_save(p, phases);
@@ -680,9 +732,10 @@ int main()
   pthread_create(&show_thread, NULL, show_routine, (void *)p);
   pthread_create(&advance_thread, NULL, advance_routine, (void *)p);
   pthread_create(&save_thread, NULL, save_routine, (void *)p);
+  pthread_create(&keypress_thread, NULL, keypress_routine, (void *)p);
 
   // Main thread IDLE
-  while (loop || p->show_return > 0 || p->advance_return > 0 || p->save_return > 0)
+  while (loop || p->show_r || p->advance_r || p->save_r || p->keypress_r)
   {
     msec_sleep(25);
   }
