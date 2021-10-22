@@ -8,6 +8,7 @@
 #include <stdarg.h>    // for multiple parameters
 #include <string.h>    // for strcpy()
 #include <stdlib.h>    // for malloc() and free()
+#include "assert.h"
 
 typedef int style;
 
@@ -66,9 +67,11 @@ static const style text_DEFAUlT = 0;
 #define HIDECURSOR ESCAPE "[?25l"
 #define SHOWCURSOR ESCAPE "[?25h"
 #define BELL "\a"
-
 #define MAX_LINES 10
 #define MAX_WIDTH 250
+
+static const int DIALOG_MAX_WIDTH = 40;
+static const int DIALOG_MAX_HEIGHT = 10;
 
 typedef struct rect
 {
@@ -101,6 +104,7 @@ typedef struct window
   int padding;
   int alignment;
   int line_wrap;
+  int visible;
   style fg_color;
   style bg_color;
   style text_style;
@@ -109,6 +113,13 @@ typedef struct window
   Rectangle size;
   Position pos;
 } Window;
+
+typedef struct dialog
+{
+  Window *window;
+  Window *buttons[2];
+  int active_button;
+} Dialog;
 
 // struct creation
 Rectangle createRectangle(int w, int h);
@@ -144,7 +155,8 @@ void set_fg_HSL(HSL color);
 void set_bg_HSL(HSL color);
 void write_at(int x, int y, char *s);
 void erase_at(int x, int y, int length);
-int poll_keypress(char *buffer);
+char poll_keypress();
+char poll_special_keypress();
 int await_keypress(char *s);
 int await_enter(char *s);
 
@@ -154,6 +166,7 @@ void deleteWindow(Window *w);
 void windowSetSize(Window *w, int width, int height);
 void windowSetWidth(Window *w, int width);
 void windowSetHeight(Window *w, int height);
+void windowSetVisibility(Window *w, int visibility);
 Rectangle windowGetSize(Window *w);
 void windowSetPosition(Window *w, int x, int y);
 Position windowGetPosition(Window *w);
@@ -162,6 +175,7 @@ void windowSetPadding(Window *w, int padding);
 void windowSetAlignment(Window *w, int alignment);
 void windowSetAutoWidth(Window *w, int auto_width);
 void windowSetAutoHeight(Window *w, int auto_width);
+void windowSetAutoSize(Window *w, int auto_size);
 void windowSetLineWrap(Window *w, int line_wrap);
 void windowAutoResize(Window *w);
 void windowSetFGcolor(Window *w, style fg_color);
@@ -174,5 +188,14 @@ int windowDeleteLine(Window *w, int line_count);
 int windowDeleteAllLines(Window *w);
 void windowShow(Window *w);
 void windowClear(Window *w);
+
+// dialog manipulation
+Dialog *createDialog(int x, int y);
+void deleteDialog(Dialog *d);
+void dialogShow(Dialog *d);
+void dialogClear(Dialog *d);
+void dialogSetPadding(Dialog *d, int padding);
+void dialogSetText(Dialog *d, char *text, int v_padding);
+int dialogWaitResponse(Dialog *d);
 
 #endif
