@@ -1,0 +1,10 @@
+Glider,Weight,Acceleration,On_Road_Traction,Off_Road_Traction,Mini_Turbo,Ground_Speed,Water_Speed,Anti_Gravity_Speed,Air_Speed,Ground_Handling,Water_Handling,Anti_Gravity_Handling,Air_Handling
+Super_Glider,1,1,1,1,1,1,1,0,2,1,0,1,1
+Cloud_Glider,0,2,1,1,2,0,1,1,1,1,0,1,2
+Wario_Wing,2,1,2,0,1,1,0,1,2,1,1,0,1
+Waddle_Wing,1,1,1,1,1,1,1,0,2,1,0,1,1
+Peach_Parasol,1,2,2,0,2,0,0,1,1,1,1,0,2
+Parachute,0,2,1,1,2,0,1,1,1,1,0,1,2
+Parafoil,1,2,2,0,2,0,0,1,1,1,1,0,2
+Flower_Glider,0,2,1,1,2,0,1,1,1,1,0,1,2
+Bowser_Kite,1,2,2,0,2,0,0,1,1,1,1,0,2
