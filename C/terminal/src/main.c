@@ -483,6 +483,7 @@ void dialog()
   Dialog *d = createDialog(8, 4);
   dialogSetPadding(d, 4);
   dialogSetText(d, "Previous session found. Continue?", 1);
+  dialogSetButtons(d, "  AYE  ", "  NAY  ");
   dialogShow(d);
   dialogWaitResponse(d);
   dialogClear(d);

@@ -1077,12 +1077,11 @@ void dialogClear(Dialog *d)
 /* Set yes/no buttons for the dialog. */
 void dialogSetButtons(Dialog *d, char *yes, char *no)
 {
-  windowDeleteAllLines(d->buttons->b1);
-  windowDeleteAllLines(d->buttons->b2);
+  windowDeleteAllLines(d->buttons[0]);
+  windowDeleteAllLines(d->buttons[1]);
 
-  windowAddLine(d->buttons->b1, yes);
-  windowAddLine(d->buttons->b2, no);
-  return;
+  windowAddLine(d->buttons[0], yes);
+  windowAddLine(d->buttons[1], no);
 }
 
 /* Sets dialog padding. */
