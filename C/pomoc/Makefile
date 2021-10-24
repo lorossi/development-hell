@@ -4,7 +4,7 @@
 
 # Compiler settings - Can be customized.
 CC = gcc
-CXXFLAGS = -std=c11 -Wall -ggdb3
+CXXFLAGS = -std=c11 -Wall
 LDFLAGS = -lpthread
 
 # Makefile settings - Can be customized.

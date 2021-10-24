@@ -2,11 +2,13 @@
 
 #include <stdio.h>
 #include <time.h>
-#include <signal.h>  // for signal()
-#include <unistd.h>  // for nanosleep()
-#include <pthread.h> // for multithread
-#include <string.h>  // for strlen()
-#include <stdlib.h>  // for malloc() and free() and rand()
+#include <signal.h>   // for signal()
+#include <unistd.h>   // for nanosleep()
+#include <pthread.h>  // for multithread
+#include <string.h>   // for strlen()
+#include <stdlib.h>   // for malloc() and free() and rand()
+#include <linux/kd.h> // for beep, i guess
+#include <fcntl.h>    // for beep
 
 #include "terminal.h"
 
@@ -37,6 +39,7 @@ typedef struct parameters
   int windows_force_reload;                  // flag to force redraw of the windows
   int phase_elapsed;                         // total time elapsed in the current phase
   int study_elapsed;                         // total time studied in the session
+  int previous_elapsed;                      // elapsed loaded from file
 } Parameters;
 
 const int STUDYDURATION = 45;
@@ -47,7 +50,7 @@ const int X_BORDER = 2;
 const int Y_BORDER = 1;
 const int PADDING = 2;
 const int BUFLEN = 250;
-const int SAVEINTERVAL = 300;
+const int SAVEINTERVAL = 1;
 const int SLEEP_INTERVAL = 50;
 
 volatile int loop;
@@ -180,6 +183,7 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->advance_r = 1;
   p->save_r = 1;
   p->keypress_r = 1;
+  p->previous_elapsed = 0;
 
   return p;
 }
@@ -412,7 +416,7 @@ int load_save(Parameters *p, Phase *phases)
   if (file_read_line(r_buffer, BUFLEN, fp) == -1)
     return -3;
   // update the parameters struct
-  p->study_elapsed = atoi(r_buffer);
+  p->previous_elapsed = atoi(r_buffer);
 
   // read total study phases
   if (file_read_line(r_buffer, BUFLEN, fp) == -1)
@@ -444,12 +448,11 @@ int load_save(Parameters *p, Phase *phases)
   // update the parameters struct
   p->current_phase->completed = atoi(r_buffer);
 
-  // does not have much sense tho
   // read current phase started
-  if (file_read_line(r_buffer, BUFLEN, fp) == -1)
-    return -8;
-  // update the parameters struct
-  p->current_phase->started = atoi(r_buffer);
+  // if (file_read_line(r_buffer, BUFLEN, fp) == -1)
+  //   return -8;
+  // // update the parameters struct
+  // p->current_phase->started = atoi(r_buffer);
 
   // force reload
   p->windows_force_reload = 1;
@@ -560,7 +563,7 @@ void *advance_routine(void *args)
 
     // update the parameters struct
     p->phase_elapsed = phase_elapsed;
-    p->study_elapsed = total_elapsed;
+    p->study_elapsed = total_elapsed + p->previous_elapsed;
 
     if (phase_elapsed / 60 > p->current_phase->duration)
     {
@@ -724,8 +727,9 @@ int main()
     deleteDialog(d);
 
     if (ret)
-      // load stats from file
-      load_save(p, phases);
+    { // load stats from file
+      ret = load_save(p, phases);
+    }
   }
 
   // spawn threads
