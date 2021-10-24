@@ -617,7 +617,7 @@ void *save_routine(void *args)
       save_stats(p);
       last_save = time(NULL);
     }
-    msec_sleep(SLEEP_INTERVAL);
+    sec_sleep(1);
   }
 
   p->save_r = 0;
@@ -645,6 +645,7 @@ void *keypress_routine(void *args)
       d = createDialog(X_BORDER, Y_BORDER);
       dialogSetPadding(d, 4);
       dialogSetText(d, "Exit pomodoro?", 1);
+      dialogSetButtons(d, "YES", "NO");
       dialogShow(d);
       ret = dialogWaitResponse(d);
       dialogClear(d);
@@ -721,6 +722,7 @@ int main()
     d = createDialog(X_BORDER, Y_BORDER);
     dialogSetPadding(d, 4);
     dialogSetText(d, "Previous session found. Continue?", 1);
+    dialogSetButtons(d, "YES", "NO");
     dialogShow(d);
     ret = dialogWaitResponse(d);
     dialogClear(d);
@@ -741,6 +743,7 @@ int main()
   // Main thread IDLE
   while (loop || p->show_r || p->advance_r || p->save_r || p->keypress_r)
   {
+    erase_at(0, 0, 2);
     msec_sleep(25);
   }
 

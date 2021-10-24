@@ -230,6 +230,30 @@ void _windowClearUnbuffered(Window *w)
   w->buffer_size = 0;
 }
 
+/* Private function. Pad string with spaces. */
+void _padString(char *dest, char *source, int chars)
+{
+  char buffer[100];
+  const int len = strlen(source);
+
+  for (int i = 0; i < chars; i++)
+    buffer[i] = ' ';
+
+  for (int i = 0; i < len; i++)
+    buffer[i + chars] = source[i];
+
+  for (int i = chars + len; i < 2 * chars + len; i++)
+    buffer[i] = ' ';
+
+  buffer[strlen(source) + 2 * chars] = '\0';
+  strcpy(dest, buffer);
+
+  // for (int i = 0; i < chars; i++)
+  //   dest[strlen(source) + chars + i] = ' ';
+
+  // dest[strlen(dest)] = '\0';
+}
+
 /* Creates a RGB struct containing the three channels.
 R, G, and B are in range 0-255. */
 RGB createRGBcolor(int R, int G, int B)
@@ -1019,19 +1043,13 @@ Dialog *createDialog(int x, int y)
   Window *b1, *b2;
   b1 = createWindow(x + 4, y - 4 + height);
   b2 = createWindow(x - 11 - 4 + width, y - 4 + height);
-  // disable auto size
-  windowSetAutoWidth(b1, 0);
-  windowSetAutoWidth(b2, 0);
-  // set width
-  windowSetWidth(b1, 11);
-  windowSetWidth(b2, 11);
   // set alignment
   windowSetAlignment(b1, 0);
   windowSetAlignment(b2, 0);
   windowSetAlignment(w, 0);
-  // add labels
-  windowAddLine(b1, "  NAY  ");
-  windowAddLine(b2, "  AYE  ");
+  // set padding
+  windowSetPadding(b1, 0);
+  windowSetPadding(b2, 0);
 
   // allocate space for dialog
   Dialog *d = malloc(sizeof(Window));
@@ -1075,6 +1093,21 @@ void dialogClear(Dialog *d)
 
   for (int i = 0; i < 2; i++)
     windowClear(d->buttons[i]);
+}
+
+/* Set yes/no buttons for the dialog. */
+void dialogSetButtons(Dialog *d, char *yes, char *no)
+{
+  char buffer[100];
+
+  windowDeleteAllLines(d->buttons[0]);
+  windowDeleteAllLines(d->buttons[1]);
+
+  _padString(buffer, yes, 2);
+  windowAddLine(d->buttons[1], buffer);
+
+  _padString(buffer, no, 2);
+  windowAddLine(d->buttons[0], buffer);
 }
 
 /* Sets dialog padding. */
