@@ -386,6 +386,7 @@ int check_save()
 
   return 1;
 }
+
 /* Loads stats from file. */
 int load_save(Parameters *p, Phase *phases)
 {
@@ -458,6 +459,20 @@ int load_save(Parameters *p, Phase *phases)
   p->windows_force_reload = 1;
 
   return 0;
+}
+
+/* Make a faint sound. Speed in range 0-10. */
+void beep(int repetitions, int speed)
+{
+  if (speed < 0 || speed > 10)
+    return;
+
+  int msec = (1 - speed / 10.0) * 800 + 200;
+  for (int i = 0; i < repetitions; i++)
+  {
+    terminal_beep();
+    msec_sleep(msec);
+  }
 }
 
 /* Routine handling terminal output */
@@ -617,7 +632,8 @@ void *save_routine(void *args)
       save_stats(p);
       last_save = time(NULL);
     }
-    sec_sleep(1);
+
+    msec_sleep(SLEEP_INTERVAL);
   }
 
   p->save_r = 0;
