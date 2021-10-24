@@ -383,6 +383,14 @@ HSL RGBtoHSL(RGB color)
   return createHSLcolor(h * 60, s * 100, l * 100);
 }
 
+/* Makes the terminal go BEEP */
+void terminal_beep()
+{
+  fflush(NULL);
+  printf(BELL);
+  fflush(NULL);
+}
+
 /* Converts a color provided the hue into the RGB space. 
 Saturation and value are assumed to be respectively 100 and 50 */
 RGB HUEtoRGB(double hue)

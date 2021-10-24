@@ -121,13 +121,11 @@ typedef struct dialog
   int active_button;
 } Dialog;
 
-// struct creation
 Rectangle createRectangle(int w, int h);
 Position createPosition(int x, int y);
 RGB createRGBcolor(int R, int G, int B);
 HSL createHSLcolor(int H, int S, int L);
 
-// colors manipulation
 RGB HSLtoRGB(HSL color);
 RGB HUEtoRGB(double hue);
 HSL RGBtoHSL(RGB color);
@@ -159,6 +157,7 @@ char poll_keypress();
 char poll_special_keypress();
 int await_keypress(char *s);
 int await_enter(char *s);
+void terminal_beep();
 
 // window manipulation
 Window *createWindow(int x, int y);
