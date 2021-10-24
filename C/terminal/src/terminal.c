@@ -1029,9 +1029,6 @@ Dialog *createDialog(int x, int y)
   windowSetAlignment(b1, 0);
   windowSetAlignment(b2, 0);
   windowSetAlignment(w, 0);
-  // add labels
-  windowAddLine(b1, "  NAY  ");
-  windowAddLine(b2, "  AYE  ");
 
   // allocate space for dialog
   Dialog *d = malloc(sizeof(Window));
@@ -1075,6 +1072,17 @@ void dialogClear(Dialog *d)
 
   for (int i = 0; i < 2; i++)
     windowClear(d->buttons[i]);
+}
+
+/* Set yes/no buttons for the dialog. */
+void dialogSetButtons(Dialog *d, char *yes, char *no)
+{
+  windowDeleteAllLines(d->buttons->b1);
+  windowDeleteAllLines(d->buttons->b2);
+
+  windowAddLine(d->buttons->b1, yes);
+  windowAddLine(d->buttons->b2, no);
+  return;
 }
 
 /* Sets dialog padding. */

@@ -194,6 +194,7 @@ Dialog *createDialog(int x, int y);
 void deleteDialog(Dialog *d);
 void dialogShow(Dialog *d);
 void dialogClear(Dialog *d);
+void dialogSetButtons(Dialog *d, char *yes, char *no);
 void dialogSetPadding(Dialog *d, int padding);
 void dialogSetText(Dialog *d, char *text, int v_padding);
 int dialogWaitResponse(Dialog *d);
