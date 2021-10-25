@@ -1,5 +1,25 @@
 #include "terminal.h"
 
+// Definition of private functions
+double _hue_to_rgb(double p, double q, double t);
+double _max(double a, double b);
+double _min(double a, double b);
+double _max_3(double a, double b, double c);
+double _min_3(double a, double b, double c);
+int _stringCopyNBytes(char *dest, char *source, int start, int end);
+int _stringCopy(char *dest, char *source);
+int _stringFindFirstSpace(char *s, int start);
+void _stringPad(char *dest, char *source, int chars);
+void _stringTrim(char *dest, char *source);
+int _windowCalculateLongestLine(Window *w);
+void _windowAutoWidth(Window *w, int longest);
+void _windowAutoHeight(Window *w);
+void _windowDrawBorder(Window *w);
+int _windowCalculateSpacing(Window *w, int current_len);
+int _windowLinesWrap(Window *w);
+int _windowLinesUnbuffer(Window *w);
+void _windowClearUnbuffered(Window *w);
+
 /* Private function. Used inside HSLtoRGB conversion. */
 double _hue_to_rgb(double p, double q, double t)
 {
@@ -46,27 +66,96 @@ double _min_3(double a, double b, double c)
   return _min(_min(a, b), c);
 }
 
-/* Private function. Find first space, going backwards, in a string. */
-int _findFirstSpace(char *s, int starting_pos, int ending_pos)
+/* Private function. Basically a re-definition of strncpy */
+int _stringCopyNBytes(char *dest, char *source, int start, int end)
 {
-  int line_length = strlen(s);
-
-  if (starting_pos == -1 || starting_pos >= line_length)
-    starting_pos = line_length - 1;
-
-  if (ending_pos > starting_pos)
+  if (start < 0 || start > strlen(source))
     return -1;
 
-  if (ending_pos < 0)
-    ending_pos = 0;
+  if (end > strlen(source) || end == -1)
+    end = strlen(source);
 
-  for (int i = starting_pos - 1; i >= ending_pos; i--)
+  if (start >= end)
+    return -1;
+
+  for (int i = start; i < end; i++)
+    dest[i - start] = source[i];
+
+  if (dest[end + 1] != '\0')
+    dest[end + 1] = '\0';
+
+  return end - start;
+}
+
+/* Private function. Basically a re-definition of _stringCopy */
+int _stringCopy(char *dest, char *source)
+{
+  return _stringCopyNBytes(dest, source, 0, -1);
+}
+
+/* Private function. Find first space, going backwards from start, in a string. */
+int _stringFindFirstSpace(char *s, int start)
+{
+  if (start < 0 || start >= strlen(s))
+    return -1;
+
+  for (int i = start; i >= 0; i--)
   {
     if (s[i] == ' ')
       return i;
   }
 
   return -1;
+}
+
+/* Private function. Pad string with spaces. */
+void _stringPad(char *dest, char *source, int chars)
+{
+  char buffer[MAX_WIDTH];
+  const int len = strlen(source);
+
+  for (int i = 0; i < chars; i++)
+    buffer[i] = ' ';
+
+  for (int i = 0; i < len; i++)
+    buffer[i + chars] = source[i];
+
+  for (int i = chars + len; i < 2 * chars + len; i++)
+    buffer[i] = ' ';
+
+  _stringCopy(dest, buffer);
+}
+
+/* Private function. Trim string. */
+void _stringTrim(char *dest, char *source)
+{
+  int start, end;
+  const int len = strlen(source);
+
+  start = 0;
+  end = len;
+
+  // find string start
+  for (int i = 0; i < len; i++)
+  {
+    if (source[i] != ' ')
+    {
+      start = i;
+      break;
+    }
+  }
+
+  // find string end
+  for (int i = len - 1; i > 0; i--)
+  {
+    if (source[i - 1] != ' ')
+    {
+      end = i;
+      break;
+    }
+  }
+
+  _stringCopyNBytes(dest, source, start, end);
 }
 
 /* Private function. Calculates the width of a window. */
@@ -162,40 +251,39 @@ int _windowCalculateSpacing(Window *w, int current_len)
 int _windowLinesWrap(Window *w)
 {
   int current = 0;
-  const int width = w->size.width - 2 * w->padding;
+  const int width = w->size.width - 2 * w->padding - 2;
   // go over each line
   for (int i = 0; i < w->buffer_size; i++)
   {
+    _stringTrim(w->lines_buffer[i], w->lines_buffer[i]);
     const int len = strlen(w->lines_buffer[i]);
+
     // if the line is too long
     if (len > width)
     {
       // break it into smaller parts
       int current_pos = 0;
+
       while (current_pos < len)
       {
-        int first_space, copy_size;
-        // check that the chunk is in bound of the string
-        first_space = _findFirstSpace(w->lines_buffer[i], current_pos + width, current_pos);
-        copy_size = first_space - current_pos;
-
-        if (copy_size <= 0)
-          copy_size = len;
-
-        if (copy_size + current_pos > len)
-          copy_size = len - current_pos;
+        // try to look for the first break point, the closest space
+        int end = _stringFindFirstSpace(w->lines_buffer[i], current_pos + width);
+        // if there isn't any space, take the whole line
+        if (end == -1)
+          end = _min(width, len) + current_pos;
 
         // copy to display lines
-        strncpy(w->display_lines[current], w->lines_buffer[i] + current_pos, copy_size);
+        _stringCopyNBytes(w->display_lines[current], w->lines_buffer[i], current_pos, end);
 
+        // continue to following lines
         current++;
-        current_pos += copy_size;
+        current_pos += end - current_pos + 1;
       }
     }
     else
     {
       // simply copy into display line
-      strcpy(w->display_lines[current], w->lines_buffer[i]);
+      _stringCopy(w->display_lines[current], w->lines_buffer[i]);
       current++;
     }
   }
@@ -203,14 +291,14 @@ int _windowLinesWrap(Window *w)
   // check if the window has to be resized or some lines have to be hidden
   if (current > w->size.height - 2 && w->auto_height)
     w->size.height = current + 2;
-  else if (w->size.height < current - 2)
+  else if (current > w->size.height - 2)
     current = w->size.height - 2;
 
   w->buffer_size = current;
 
   // copy back into display lines to prevent double wrapping
   for (int i = 0; i < w->buffer_size; i++)
-    strcpy(w->lines_buffer[i], w->display_lines[i]);
+    _stringCopy(w->lines_buffer[i], w->display_lines[i]);
 
   return current;
 }
@@ -219,7 +307,7 @@ int _windowLinesWrap(Window *w)
 int _windowLinesUnbuffer(Window *w)
 {
   for (int i = 0; i < w->buffer_size; i++)
-    strcpy(w->display_lines[i], w->lines_buffer[i]);
+    _stringCopy(w->display_lines[i], w->lines_buffer[i]);
 
   return w->buffer_size;
 }
@@ -228,30 +316,6 @@ int _windowLinesUnbuffer(Window *w)
 void _windowClearUnbuffered(Window *w)
 {
   w->buffer_size = 0;
-}
-
-/* Private function. Pad string with spaces. */
-void _padString(char *dest, char *source, int chars)
-{
-  char buffer[100];
-  const int len = strlen(source);
-
-  for (int i = 0; i < chars; i++)
-    buffer[i] = ' ';
-
-  for (int i = 0; i < len; i++)
-    buffer[i + chars] = source[i];
-
-  for (int i = chars + len; i < 2 * chars + len; i++)
-    buffer[i] = ' ';
-
-  buffer[strlen(source) + 2 * chars] = '\0';
-  strcpy(dest, buffer);
-
-  // for (int i = 0; i < chars; i++)
-  //   dest[strlen(source) + chars + i] = ' ';
-
-  // dest[strlen(dest)] = '\0';
 }
 
 /* Creates a RGB struct containing the three channels.
@@ -923,7 +987,7 @@ int windowAddLine(Window *w, char *line)
   if (w->buffer_size > MAX_LINES)
     return -1;
 
-  strcpy(w->lines_buffer[w->buffer_size], line);
+  _stringCopy(w->lines_buffer[w->buffer_size], line);
   w->buffer_size++;
 
   return sizeof(w->lines_buffer[w->buffer_size - 1]);
@@ -935,7 +999,7 @@ int windowChangeLine(Window *w, char *line, int line_count)
   if (line_count > w->buffer_size)
     return -1;
 
-  strcpy(w->lines_buffer[line_count], line);
+  _stringCopy(w->lines_buffer[line_count], line);
 
   return sizeof(w->lines_buffer[line_count]);
 }
@@ -949,7 +1013,7 @@ int windowDeleteLine(Window *w, int line_count)
   w->buffer_size--;
 
   for (int i = line_count; i < w->buffer_size; i++)
-    strcpy(w->lines_buffer[i], w->lines_buffer[i + 1]);
+    _stringCopy(w->lines_buffer[i], w->lines_buffer[i + 1]);
 
   return w->buffer_size;
 }
@@ -958,7 +1022,7 @@ int windowDeleteLine(Window *w, int line_count)
 int windowDeleteAllLines(Window *w)
 {
   for (int i = 0; i < w->buffer_size; i++)
-    strcpy(w->lines_buffer[i], "");
+    _stringCopy(w->lines_buffer[i], "");
 
   w->buffer_size = 0;
 
@@ -972,9 +1036,9 @@ void windowShow(Window *w)
   if (!w->visible)
     return;
 
+  int longest;
   // calculate longest line
-  int longest = _windowCalculateLongestLine(w);
-
+  longest = _windowCalculateLongestLine(w);
   // auto resize window
   if (w->auto_width)
     _windowAutoWidth(w, longest);
@@ -984,9 +1048,17 @@ void windowShow(Window *w)
   // check if lines need to be wrapped
   const int width = w->size.width - 2 * w->padding;
   if (longest >= width && w->line_wrap)
-    _windowLinesWrap(w); // windows are auto resized if needed
+  {
+    // windows are auto resized if needed
+    _windowLinesWrap(w);
+    // re calculate longest line
+    longest = _windowCalculateLongestLine(w);
+  }
   else
+  {
+    // simply copy the buffer onto the screen
     _windowLinesUnbuffer(w);
+  }
 
   // set styles
   set_fg(w->fg_color);
@@ -1108,10 +1180,10 @@ void dialogSetButtons(Dialog *d, char *yes, char *no)
   windowDeleteAllLines(d->buttons[0]);
   windowDeleteAllLines(d->buttons[1]);
 
-  _padString(buffer, yes, 2);
+  _stringPad(buffer, yes, 2);
   windowAddLine(d->buttons[1], buffer);
 
-  _padString(buffer, no, 2);
+  _stringPad(buffer, no, 2);
   windowAddLine(d->buttons[0], buffer);
 }
 
