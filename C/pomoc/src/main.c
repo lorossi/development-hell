@@ -125,7 +125,9 @@ int file_count_lines(FILE *fp)
 
 void SIGINT_handler()
 {
-  sigint_called = 1;
+  if (loop)
+    sigint_called = 1;
+
   return;
 }
 
@@ -801,7 +803,7 @@ void *keypress_routine(void *args)
         p->frozen_elapsed = (time(NULL) - p->current_phase->started);
         // add info in the opportune window
         windowDeleteAllLines(p->w_status);
-        windowAddLine(p->w_status, "PAUSED");
+        windowAddLine(p->w_status, "WARNING, TIMER IS CURRENTLY PAUSED");
       }
       // force windows refresh
       p->windows_force_reload = 1;
@@ -821,8 +823,7 @@ void *keypress_routine(void *args)
 
 int main()
 {
-  //start the loop
-  loop = 1;
+  // setup callback flag
   sigint_called = 0;
   // init random seed
   srand(time(NULL));
@@ -903,16 +904,17 @@ int main()
     }
   }
 
+  //start the loop
+  loop = 1;
+
   // spawn threads
   pthread_create(&show_thread, NULL, show_routine, (void *)p);
   pthread_create(&advance_thread, NULL, advance_routine, (void *)p);
   pthread_create(&save_thread, NULL, save_routine, (void *)p);
   pthread_create(&keypress_thread, NULL, keypress_routine, (void *)p);
 
-  // start counting time
   reset_current_time(p);
   start_time(p);
-
   // Main thread IDLE
   while (loop || p->show_r || p->advance_r || p->save_r || p->keypress_r)
   {
