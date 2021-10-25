@@ -591,6 +591,13 @@ void *advance_routine(void *args)
       {
         // yes
         p->study_phases++;
+        // make a short series of beeps
+        beep(3, 5);
+      }
+      else
+      {
+        // make a fast series of beeps
+        beep(5, 3);
       }
 
       // check if this phase must be repeated
@@ -760,6 +767,7 @@ int main()
   while (loop || p->show_r || p->advance_r || p->save_r || p->keypress_r)
   {
     erase_at(0, 0, 2);
+    move_cursor_to_bottom();
     msec_sleep(25);
   }
 
