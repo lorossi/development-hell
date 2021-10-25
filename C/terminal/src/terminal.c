@@ -612,16 +612,13 @@ void erase_at(int x, int y, int length)
   return;
 }
 
-/* Polls a keypress. Returns the code corresponding to the key. */
+/* Polls a keypress. Returns the code corresponding to the key. Needs to be in raw mode. */
 char poll_keypress()
 {
   char buf;
-  enter_raw_mode();
 
   if (read(0, &buf, 1) == 0)
     buf = 0;
-
-  exit_raw_mode();
 
   return buf;
 }
@@ -1139,6 +1136,7 @@ void dialogSetText(Dialog *d, char *text, int v_padding)
   return;
 }
 
+/* Polls a response for for the dialog. Needs raw mode. */
 int dialogWaitResponse(Dialog *d)
 {
   while (1)
