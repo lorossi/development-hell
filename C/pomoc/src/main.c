@@ -77,6 +77,7 @@ void format_date(char *buffer);
 int save_stats(Parameters *p);
 int check_save();
 int load_save(Parameters *p, Phase *phases);
+void toggle_all_windows(Parameters *p, int visibility);
 void *beep_async(void *args);
 void *show_routine(void *args);
 void *advance_routine(void *args);
