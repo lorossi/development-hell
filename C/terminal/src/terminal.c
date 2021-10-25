@@ -795,7 +795,10 @@ void windowSetVisibility(Window *w, int visibility)
 /* Gets window size. */
 Rectangle windowGetSize(Window *w)
 {
-  return w->size;
+  if (w->visible)
+    return w->size;
+
+  return createRectangle(0, 0);
 }
 
 /* Sets position of a window. */

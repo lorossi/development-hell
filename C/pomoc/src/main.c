@@ -32,26 +32,26 @@ typedef struct phase
 
 typedef struct parameters
 {
-  Phase *current_phase;                      // current phase of the timer
-  Window *w_phase, *w_total, *w_quote;       // displayed windows
-  int show_r, advance_r, save_r, keypress_r; // return values of threads
-  int study_phases;                          // amount of currently studied phases
-  int windows_force_reload;                  // flag to force redraw of the windows
-  int phase_elapsed;                         // total time elapsed in the current phase
-  int study_elapsed;                         // total time studied in the session
-  int previous_elapsed;                      // elapsed loaded from file
+  Phase *current_phase;                         // current phase of the timer
+  Window *w_phase, *w_total, *w_quote, *w_info; // displayed windows
+  int show_r, advance_r, save_r, keypress_r;    // return values of threads
+  int study_phases;                             // amount of currently studied phases
+  int windows_force_reload;                     // flag to force redraw of the windows
+  int phase_elapsed;                            // total time elapsed in the current phase
+  int study_elapsed;                            // total time studied in the session
+  int previous_elapsed;                         // elapsed loaded from file
 } Parameters;
 
-const int STUDYDURATION = 45;
-const int SHORTBREAKDURATION = 5;
-const int LONGBREAKDURATION = 20;
-const int STUDYSESSIONS = 4;
+const int STUDYDURATION = 45;     // duration of the study phase, minutes
+const int SHORTBREAKDURATION = 5; // duration of the short break, minutes
+const int LONGBREAKDURATION = 20; // duration of the long break, minutes
+const int STUDYSESSIONS = 4;      // number of study sessions before long break
 const int X_BORDER = 2;
 const int Y_BORDER = 1;
 const int PADDING = 2;
-const int BUFLEN = 250;
-const int SAVEINTERVAL = 1;
-const int SLEEP_INTERVAL = 50;
+const int BUFLEN = 250;        // length of the buffers
+const int SAVEINTERVAL = 1000; // interval between saves, msec
+const int SLEEP_INTERVAL = 50; // threads sleep time, msec
 
 volatile int loop;
 volatile int sigint_called;
@@ -167,7 +167,7 @@ void init_pomodoro(Phase phases[3])
   };
 }
 
-Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote)
+Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote, Window *w_info)
 {
   Parameters *p = malloc(sizeof(Parameters));
   p->current_phase = current_phase;
@@ -179,6 +179,7 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->w_phase = w_phase;
   p->w_total = w_total;
   p->w_quote = w_quote;
+  p->w_info = w_info;
   p->show_r = 1;
   p->advance_r = 1;
   p->save_r = 1;
@@ -186,6 +187,11 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->previous_elapsed = 0;
 
   return p;
+}
+
+void delete_parameters(Parameters *p)
+{
+  free(p);
 }
 
 /* Set initial phase */
@@ -479,6 +485,7 @@ void beep(int repetitions, int speed)
 void *show_routine(void *args)
 {
   Parameters *p = args;
+  time_t last_show = 0;
   while (loop)
   {
     char buffer[BUFLEN];
@@ -543,15 +550,25 @@ void *show_routine(void *args)
       windowSetSize(p->w_quote, total_br_corner.x - X_BORDER, 4);
       // needs to be shown only once
       windowShow(p->w_quote);
+
+      // set position of w_info
+      windowAutoResize(p->w_quote); // trigger resize to get the actual width
+      Position quotes_br_corner = windowGetBottomRight(p->w_quote);
+      windowSetPosition(p->w_info, X_BORDER, quotes_br_corner.y);
+      windowSetWidth(p->w_info, windowGetSize(p->w_quote).width);
+      // needs to be shown only once
+      windowShow(p->w_info);
+
       // don't update again
       p->windows_force_reload = 0;
     }
 
-    // show windows
-    windowShow(p->w_phase);
-    windowShow(p->w_total);
-
-    move_cursor_to(0, 0);
+    if (time(NULL) != last_show)
+    {
+      last_show = time(NULL);
+      windowShow(p->w_phase);
+      windowShow(p->w_total);
+    }
 
     // idle
     msec_sleep(SLEEP_INTERVAL);
@@ -707,7 +724,7 @@ int main()
   pthread_t show_thread, advance_thread, save_thread, keypress_thread;
   Phase phases[3], *current_phase;
   Parameters *p;
-  Window *w_phase, *w_total, *w_quote;
+  Window *w_phase, *w_total, *w_quote, *w_info;
 
   init_pomodoro(phases);
   current_phase = set_initial_phase(phases);
@@ -724,13 +741,20 @@ int main()
   // w_quote with... a quote
   w_quote = createWindow(X_BORDER, Y_BORDER);
   windowSetAlignment(w_quote, 0);
-  windowSetAutoWidth(w_quote, 0);
   windowSetPadding(w_quote, PADDING);
+  windowSetAutoWidth(w_quote, 0);
   windowSetFGcolor(w_quote, fg_BRIGHT_BLUE);
   windowSetTextStyle(w_quote, text_ITALIC);
+  // window with info
+  w_info = createWindow(0, 0);
+  windowSetAlignment(w_info, 0);
+  windowSetPadding(w_info, PADDING);
+  windowSetAutoWidth(w_info, 0);
+  windowSetFGcolor(w_info, fg_BRIGHT_GREEN);
+  windowAddLine(w_info, "press S to skip, P to pause, ctrl+c to exit");
 
   // pack the parameters
-  p = init_parameters(current_phase, w_phase, w_total, w_quote);
+  p = init_parameters(current_phase, w_phase, w_total, w_quote, w_info);
 
   // prepare terminal
   clear_terminal();
@@ -767,12 +791,11 @@ int main()
   while (loop || p->show_r || p->advance_r || p->save_r || p->keypress_r)
   {
     erase_at(0, 0, 2);
-    move_cursor_to_bottom();
     msec_sleep(25);
   }
 
   // clean up
-  free(p);
+  delete_parameters(p);
   deleteWindow(w_phase);
   deleteWindow(w_total);
   deleteWindow(w_quote);

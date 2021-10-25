@@ -795,7 +795,10 @@ void windowSetVisibility(Window *w, int visibility)
 /* Gets window size. */
 Rectangle windowGetSize(Window *w)
 {
-  return w->size;
+  if (w->visible)
+    return w->size;
+
+  return createRectangle(0, 0);
 }
 
 /* Sets position of a window. */
@@ -1026,9 +1029,6 @@ void windowClear(Window *w)
   reset_bg();
   for (int y = 0; y < w->size.height; y++)
     erase_at(w->pos.x, y + w->pos.y, w->size.width);
-
-  // clear window buffer
-  _windowClearUnbuffered(w);
 }
 
 /* Creates a dialog window. */
