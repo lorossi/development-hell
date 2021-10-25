@@ -1029,9 +1029,6 @@ void windowClear(Window *w)
   reset_bg();
   for (int y = 0; y < w->size.height; y++)
     erase_at(w->pos.x, y + w->pos.y, w->size.width);
-
-  // clear window buffer
-  _windowClearUnbuffered(w);
 }
 
 /* Creates a dialog window. */
