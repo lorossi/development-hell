@@ -2,13 +2,11 @@
 
 #include <stdio.h>
 #include <time.h>
-#include <signal.h>   // for signal()
-#include <unistd.h>   // for nanosleep()
-#include <pthread.h>  // for multithread
-#include <string.h>   // for strlen()
-#include <stdlib.h>   // for malloc() and free() and rand()
-#include <linux/kd.h> // for beep, i guess
-#include <fcntl.h>    // for beep
+#include <signal.h>  // for signal()
+#include <unistd.h>  // for nanosleep()
+#include <pthread.h> // for multithread
+#include <string.h>  // for strlen()
+#include <stdlib.h>  // for malloc() and free() and rand()
 
 #include "terminal.h"
 
@@ -30,16 +28,16 @@ typedef struct phase
 
 typedef struct parameters
 {
-  pthread_mutex_t *terminal_lock;               // terminal lock using mutex
-  Phase *current_phase;                         // current phase of the timer
-  Window *w_phase, *w_total, *w_quote, *w_info; // displayed windows
-  int show_r, advance_r, save_r, keypress_r;    // return values of threads
-  int study_phases;                             // amount of currently studied phases
-  int windows_force_reload;                     // flag to force redraw of the windows
-  int phase_elapsed;                            // total time elapsed in the current phase
-  int study_elapsed;                            // total time studied in the session
-  int previous_elapsed;                         // elapsed loaded from file
-  int time_paused, frozen_elapsed;              // flag to pause time
+  pthread_mutex_t *terminal_lock;                          // terminal lock using mutex
+  Phase *current_phase;                                    // current phase of the timer
+  Window *w_phase, *w_total, *w_quote, *w_info, *w_status; // displayed windows
+  int show_r, advance_r, save_r, keypress_r;               // return values of threads
+  int study_phases;                                        // amount of currently studied phases
+  int windows_force_reload;                                // flag to force redraw of the windows
+  int phase_elapsed;                                       // total time elapsed in the current phase
+  int study_elapsed;                                       // total time studied in the session
+  int previous_elapsed;                                    // elapsed loaded from file
+  int time_paused, frozen_elapsed;                         // flag to pause time
 } Parameters;
 
 /* Constants */
@@ -68,7 +66,7 @@ void SIGINT_handler();
 void msec_sleep(int msec);
 void sec_sleep(int sec);
 void init_pomodoro(Phase phases[3]);
-Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote, Window *w_info);
+Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote, Window *w_info, Window *w_status);
 void delete_parameters(Parameters *p);
 Phase *set_initial_phase(Phase phases[3]);
 void reset_current_time(Parameters *p);
@@ -79,7 +77,7 @@ void format_date(char *buffer);
 int save_stats(Parameters *p);
 int check_save();
 int load_save(Parameters *p, Phase *phases);
-void beep(int repetitions, int speed);
+void *beep_async(void *args);
 void *show_routine(void *args);
 void *advance_routine(void *args);
 void *save_routine(void *args);
@@ -200,7 +198,7 @@ void init_pomodoro(Phase phases[3])
   };
 }
 
-Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote, Window *w_info)
+Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote, Window *w_info, Window *w_status)
 {
   Parameters *p = malloc(sizeof(Parameters));
 
@@ -217,6 +215,7 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->w_total = w_total;
   p->w_quote = w_quote;
   p->w_info = w_info;
+  p->w_status = w_status;
   p->show_r = 1;
   p->advance_r = 1;
   p->save_r = 1;
@@ -261,23 +260,19 @@ void start_time(Parameters *p)
 /* Go to next phase */
 void next_phase(Parameters *p)
 {
+  pthread_t beep_thread;
+  pthread_create(&beep_thread, NULL, beep_async, p->terminal_lock);
+  pthread_detach(beep_thread);
+
   // one phase has been completed
   p->current_phase->completed++;
   // force windows reload
   p->windows_force_reload = 1;
   // shall the phase count toward the maximum?
+
+  // yes
   if (p->current_phase->is_study)
-  {
-    // yes
     p->study_phases++;
-    // make a short series of beeps
-    beep(3, 5);
-  }
-  else
-  {
-    // make a long series of beeps
-    beep(3, 3);
-  }
 
   // check if this phase must be repeated
   if (p->current_phase->completed >= p->current_phase->repetitions && p->current_phase->repetitions > 0)
@@ -548,30 +543,21 @@ int load_save(Parameters *p, Phase *phases)
   // update the parameters struct
   p->current_phase->completed = atoi(r_buffer);
 
-  // read current phase started
-  // if (file_read_line(r_buffer, BUFLEN, fp) == -1)
-  //   return -8;
-  // // update the parameters struct
-  // p->current_phase->started = atoi(r_buffer);
-
-  // force reload
-  p->windows_force_reload = 1;
-
   return 0;
 }
 
-/* Make a faint sound. Speed in range 0-10. */
-void beep(int repetitions, int speed)
+/* Async beeping */
+void *beep_async(void *args)
 {
-  if (speed < 0 || speed > 10)
-    return;
-
-  int msec = (1 - speed / 10.0) * 800 + 200;
-  for (int i = 0; i < repetitions; i++)
+  pthread_mutex_t *terminal_lock = args;
+  for (int i = 0; i < 5; i++)
   {
+    pthread_mutex_lock(terminal_lock);
     terminal_beep();
-    msec_sleep(msec);
+    pthread_mutex_unlock(terminal_lock);
+    msec_sleep(200);
   }
+  pthread_exit(0);
 }
 
 /* Routine handling terminal output */
@@ -621,12 +607,15 @@ void *show_routine(void *args)
     windowAddLine(p->w_total, buffer);
 
     // refresh
+    // wait for exclusive use of terminal
+    pthread_mutex_lock(p->terminal_lock);
     windowShow(p->w_phase);
     windowShow(p->w_total);
+    // unlock terminal
+    pthread_mutex_unlock(p->terminal_lock);
 
     if (p->windows_force_reload)
     {
-
       // set position of w_total
       windowAutoResize(p->w_phase); // trigger resize to get the actual width
       Position phase_br_corner = windowGetBottomRight(p->w_phase);
@@ -645,21 +634,35 @@ void *show_routine(void *args)
       Position quotes_br_corner = windowGetBottomRight(p->w_quote);
       windowSetPosition(p->w_info, X_BORDER, quotes_br_corner.y);
       windowSetWidth(p->w_info, windowGetSize(p->w_quote).width);
-      // needs to be shown only once
+
+      // set position of w_status
+      windowAutoResize(p->w_info); // trigger resize to get the actual width
+      Position info_br_corner = windowGetBottomRight(p->w_info);
+      windowSetPosition(p->w_status, X_BORDER, info_br_corner.y);
+      windowSetWidth(p->w_status, windowGetSize(p->w_quote).width);
+      windowSetVisibility(p->w_status, p->time_paused);
+      windowAutoResize(p->w_status);
 
       // clear terminal
       clear_terminal();
 
       // display all
+
+      // wait for exclusive use of terminal
+      pthread_mutex_lock(p->terminal_lock);
       windowClear(p->w_phase);
       windowClear(p->w_total);
       windowClear(p->w_quote);
       windowClear(p->w_info);
+      windowClear(p->w_status);
 
       windowShow(p->w_phase);
       windowShow(p->w_total);
       windowShow(p->w_quote);
       windowShow(p->w_info);
+      windowShow(p->w_status);
+      // unlock terminal
+      pthread_mutex_unlock(p->terminal_lock);
 
       // don't update again
       p->windows_force_reload = 0;
@@ -781,28 +784,35 @@ void *keypress_routine(void *args)
     char key;
     // wait for exclusive use of terminal
     pthread_mutex_lock(p->terminal_lock);
+    key = poll_keypress();
     // unlock terminal
     pthread_mutex_unlock(p->terminal_lock);
 
-    key = poll_keypress();
     if (key >= 65 && key <= 90)
       key += 32;
 
     if (key == 'p')
     {
-      p->time_paused = ~p->time_paused;
+      p->time_paused = !p->time_paused;
 
       if (p->time_paused)
       {
+        // keep time of the frozed elapsed phase
         p->frozen_elapsed = (time(NULL) - p->current_phase->started);
+        // add info in the opportune window
+        windowDeleteAllLines(p->w_status);
+        windowAddLine(p->w_status, "PAUSED");
       }
+      // force windows refresh
+      p->windows_force_reload = 1;
     }
     else if (key == 's')
     {
       next_phase(p);
+      p->windows_force_reload = 1;
     }
 
-    msec_sleep(SLEEP_INTERVAL);
+    msec_sleep(500);
   }
 
   p->keypress_r = 0;
@@ -826,7 +836,7 @@ int main()
   pthread_t show_thread, advance_thread, save_thread, keypress_thread;
   Phase phases[3], *current_phase;
   Parameters *p;
-  Window *w_phase, *w_total, *w_quote, *w_info;
+  Window *w_phase, *w_total, *w_quote, *w_info, *w_status;
 
   init_pomodoro(phases);
   current_phase = set_initial_phase(phases);
@@ -856,8 +866,17 @@ int main()
   windowSetAutoWidth(w_info, 0);
   windowSetFGcolor(w_info, fg_BRIGHT_GREEN);
   windowAddLine(w_info, "press S to skip, P to pause, ctrl+c to exit");
+  // window with current status
+  w_status = createWindow(0, 0);
+  windowSetAlignment(w_status, 0);
+  windowSetPadding(w_status, PADDING);
+  windowSetAutoWidth(w_status, 0);
+  windowSetFGcolor(w_status, fg_RED);
+  windowSetTextStyle(w_status, text_BLINKING);
+  windowSetVisibility(w_status, 0);
+
   // pack the parameters
-  p = init_parameters(current_phase, w_phase, w_total, w_quote, w_info);
+  p = init_parameters(current_phase, w_phase, w_total, w_quote, w_info, w_status);
 
   // prepare terminal
   clear_terminal();
