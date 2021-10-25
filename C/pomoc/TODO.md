@@ -1,6 +1,6 @@
 # TODO
 
-- Add sound at the end of the session
+- ~~Add sound at the end of the session~~
   - [http://www.johnath.com/beep/beep.c] look here
   - **IT'S QUITE HARD TO DO THAT**
   - use the new `beep` function in code
