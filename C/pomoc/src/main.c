@@ -548,6 +548,16 @@ int load_save(Parameters *p, Phase *phases)
   return 0;
 }
 
+/* Clears terminal and hides/shows all windows on screen */
+void toggle_all_windows(Parameters *p, int visibility)
+{
+  clear_terminal();
+  windowSetVisibility(p->w_phase, visibility);
+  windowSetVisibility(p->w_total, visibility);
+  windowSetVisibility(p->w_quote, visibility);
+  windowSetVisibility(p->w_status, visibility);
+}
+
 /* Async beeping */
 void *beep_async(void *args)
 {
@@ -752,11 +762,13 @@ void *keypress_routine(void *args)
     if (sigint_called)
     {
       sigint_called = 0;
-      p->w_phase->visible = 0;
-      p->w_total->visible = 0;
-      p->w_quote->visible = 0;
 
-      clear_terminal();
+      // hide all windows
+      // wait for exclusive use of terminal
+      pthread_mutex_lock(p->terminal_lock);
+      toggle_all_windows(p, 0);
+      // unlock terminal
+      pthread_mutex_unlock(p->terminal_lock);
 
       Dialog *d;
       int ret;
@@ -776,9 +788,13 @@ void *keypress_routine(void *args)
       }
       else
       {
-        p->w_phase->visible = 1;
-        p->w_total->visible = 1;
-        p->w_quote->visible = 1;
+        // show windows again
+        // wait for exclusive use of terminal
+        pthread_mutex_lock(p->terminal_lock);
+        toggle_all_windows(p, 1);
+        // unlock terminal
+        pthread_mutex_unlock(p->terminal_lock);
+
         p->windows_force_reload = 1;
       }
     }
@@ -810,11 +826,45 @@ void *keypress_routine(void *args)
     }
     else if (key == 's')
     {
-      next_phase(p);
+
+      // hide all windows
+      // wait for exclusive use of terminal
+      pthread_mutex_lock(p->terminal_lock);
+      toggle_all_windows(p, 0);
+      // unlock terminal
+      pthread_mutex_unlock(p->terminal_lock);
+
+      p->time_paused = 1;
+
+      Dialog *d;
+      int ret;
+
+      d = createDialog(X_BORDER, Y_BORDER);
+      dialogSetPadding(d, 4);
+      dialogSetText(d, "Do you want to skip the current session?", 1);
+      dialogSetButtons(d, "YES", "NO");
+      dialogShow(d);
+      ret = dialogWaitResponse(d);
+      dialogClear(d);
+      deleteDialog(d);
+
+      if (ret)
+      { // load stats from file
+        next_phase(p);
+      }
+
+      // show windows again
+      // wait for exclusive use of terminal
+      pthread_mutex_lock(p->terminal_lock);
+      toggle_all_windows(p, 1);
+      // unlock terminal
+      pthread_mutex_unlock(p->terminal_lock);
+
+      p->time_paused = 0;
       p->windows_force_reload = 1;
     }
 
-    msec_sleep(500);
+    msec_sleep(SLEEP_INTERVAL);
   }
 
   p->keypress_r = 0;
