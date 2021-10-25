@@ -12,9 +12,7 @@
 
 #include "terminal.h"
 
-#define QUOTES_PATH ".QUOTES"
-#define SAVE_PATH ".SAVE"
-
+/* Structs declaration */
 typedef struct phase
 {
   char *name;
@@ -32,6 +30,7 @@ typedef struct phase
 
 typedef struct parameters
 {
+  pthread_mutex_t *terminal_lock;               // terminal lock using mutex
   Phase *current_phase;                         // current phase of the timer
   Window *w_phase, *w_total, *w_quote, *w_info; // displayed windows
   int show_r, advance_r, save_r, keypress_r;    // return values of threads
@@ -40,7 +39,10 @@ typedef struct parameters
   int phase_elapsed;                            // total time elapsed in the current phase
   int study_elapsed;                            // total time studied in the session
   int previous_elapsed;                         // elapsed loaded from file
+  int time_paused, frozen_elapsed;              // flag to pause time
 } Parameters;
+
+/* Constants */
 
 const int STUDYDURATION = 45;     // duration of the study phase, minutes
 const int SHORTBREAKDURATION = 5; // duration of the short break, minutes
@@ -49,13 +51,44 @@ const int STUDYSESSIONS = 4;      // number of study sessions before long break
 const int X_BORDER = 2;
 const int Y_BORDER = 1;
 const int PADDING = 2;
-const int BUFLEN = 250;        // length of the buffers
-const int SAVEINTERVAL = 1000; // interval between saves, msec
-const int SLEEP_INTERVAL = 50; // threads sleep time, msec
+const int BUFLEN = 250;         // length of the buffers
+const int SAVEINTERVAL = 1000;  // interval between saves, msec
+const int SLEEP_INTERVAL = 100; // threads sleep time, msec
+
+#define QUOTES_PATH ".QUOTES"
+#define SAVE_PATH ".SAVE"
 
 volatile int loop;
 volatile int sigint_called;
 
+/* Functions declaration */
+int file_read_line(char *buffer, int max_bytes, FILE *fp);
+int file_count_lines(FILE *fp);
+void SIGINT_handler();
+void msec_sleep(int msec);
+void sec_sleep(int sec);
+void init_pomodoro(Phase phases[3]);
+Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote, Window *w_info);
+void delete_parameters(Parameters *p);
+Phase *set_initial_phase(Phase phases[3]);
+void reset_current_time(Parameters *p);
+void format_elapsed_time(int elapsed, char *buffer);
+void format_local_time(char *buffer);
+int get_random_quote(Window *w);
+void format_date(char *buffer);
+int save_stats(Parameters *p);
+int check_save();
+int load_save(Parameters *p, Phase *phases);
+void beep(int repetitions, int speed);
+void *show_routine(void *args);
+void *advance_routine(void *args);
+void *save_routine(void *args);
+void *keypress_routine(void *args);
+int main();
+
+/* Code starts here */
+
+/* Read the current line from file */
 int file_read_line(char *buffer, int max_bytes, FILE *fp)
 {
   if (fgets(buffer, BUFLEN, fp) == NULL)
@@ -170,6 +203,10 @@ void init_pomodoro(Phase phases[3])
 Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_total, Window *w_quote, Window *w_info)
 {
   Parameters *p = malloc(sizeof(Parameters));
+
+  p->terminal_lock = malloc(sizeof(*(p->terminal_lock)));
+  pthread_mutex_init(p->terminal_lock, NULL);
+
   p->current_phase = current_phase;
   p->study_phases = 0;
   p->study_elapsed = 0;
@@ -185,12 +222,16 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->save_r = 1;
   p->keypress_r = 1;
   p->previous_elapsed = 0;
+  p->time_paused = 1;
+  p->frozen_elapsed = 0;
 
   return p;
 }
 
 void delete_parameters(Parameters *p)
 {
+  pthread_mutex_destroy(p->terminal_lock);
+  free(p->terminal_lock);
   free(p);
 }
 
@@ -203,6 +244,55 @@ Phase *set_initial_phase(Phase phases[3])
   // reset current phase time
   current_phase->started = time(NULL);
   return current_phase;
+}
+
+/* Reset current phase time */
+void reset_current_time(Parameters *p)
+{
+  p->current_phase->started = time(NULL);
+}
+
+/* Start counting time */
+void start_time(Parameters *p)
+{
+  p->time_paused = 0;
+}
+
+/* Go to next phase */
+void next_phase(Parameters *p)
+{
+  // one phase has been completed
+  p->current_phase->completed++;
+  // force windows reload
+  p->windows_force_reload = 1;
+  // shall the phase count toward the maximum?
+  if (p->current_phase->is_study)
+  {
+    // yes
+    p->study_phases++;
+    // make a short series of beeps
+    beep(3, 5);
+  }
+  else
+  {
+    // make a long series of beeps
+    beep(3, 3);
+  }
+
+  // check if this phase must be repeated
+  if (p->current_phase->completed >= p->current_phase->repetitions && p->current_phase->repetitions > 0)
+  {
+    // repetitions have ended
+    p->current_phase->completed = 0;
+    p->current_phase = p->current_phase->next_after;
+  }
+  else
+  {
+    // no repetitions or repetitions already finished
+    p->current_phase = p->current_phase->next;
+  }
+
+  reset_current_time(p);
 }
 
 /* Format elapsed time and save into buffer */
@@ -236,19 +326,21 @@ void format_local_time(char *buffer)
   return;
 }
 
-/* Get random quote and save into buffer */
-int get_random_quote(char *b_quote, char *b_author)
+/* Get random quote and save into window */
+int get_random_quote(Window *w)
 {
   char r_buffer[BUFLEN];
-
   int rindex, count;
-  count = 0;
-
   FILE *fp;
+
+  count = 0;
   fp = fopen(QUOTES_PATH, "r");
 
   if (fp == NULL)
     return -1;
+
+  // reset quotes window
+  windowDeleteAllLines(w);
 
   // calculate the number of lines
   const int quotes_num = file_count_lines(fp);
@@ -284,7 +376,7 @@ int get_random_quote(char *b_quote, char *b_author)
       }
 
       // copy quote into destination
-      strcpy(b_quote, r_buffer);
+      windowAddLine(w, r_buffer);
 
       // find author in buffer
       for (int i = 0; i < line_end - author_start; i++)
@@ -294,7 +386,8 @@ int get_random_quote(char *b_quote, char *b_author)
       r_buffer[line_end - author_start] = '\0';
 
       // copy author into destination
-      strcpy(b_author, r_buffer);
+      windowAddLine(w, r_buffer);
+
       break;
     }
 
@@ -485,7 +578,7 @@ void beep(int repetitions, int speed)
 void *show_routine(void *args)
 {
   Parameters *p = args;
-  time_t last_show = 0;
+
   while (loop)
   {
     char buffer[BUFLEN];
@@ -527,16 +620,12 @@ void *show_routine(void *args)
     format_local_time(buffer);
     windowAddLine(p->w_total, buffer);
 
+    // refresh
+    windowShow(p->w_phase);
+    windowShow(p->w_total);
+
     if (p->windows_force_reload)
     {
-      // load quote
-      char b_quote[BUFLEN], b_author[BUFLEN];
-      get_random_quote(b_quote, b_author);
-      // reset quotes window
-      windowDeleteAllLines(p->w_quote);
-      // add quotes to window
-      windowAddLine(p->w_quote, b_quote);
-      windowAddLine(p->w_quote, b_author);
 
       // set position of w_total
       windowAutoResize(p->w_phase); // trigger resize to get the actual width
@@ -557,17 +646,23 @@ void *show_routine(void *args)
       windowSetPosition(p->w_info, X_BORDER, quotes_br_corner.y);
       windowSetWidth(p->w_info, windowGetSize(p->w_quote).width);
       // needs to be shown only once
+
+      // clear terminal
+      clear_terminal();
+
+      // display all
+      windowClear(p->w_phase);
+      windowClear(p->w_total);
+      windowClear(p->w_quote);
+      windowClear(p->w_info);
+
+      windowShow(p->w_phase);
+      windowShow(p->w_total);
+      windowShow(p->w_quote);
       windowShow(p->w_info);
 
       // don't update again
       p->windows_force_reload = 0;
-    }
-
-    if (time(NULL) != last_show)
-    {
-      last_show = time(NULL);
-      windowShow(p->w_phase);
-      windowShow(p->w_total);
     }
 
     // idle
@@ -583,58 +678,36 @@ void *advance_routine(void *args)
   Parameters *p = args;
   while (loop)
   {
-    int phase_elapsed;
-    // calculate minutes elapsed
-    phase_elapsed = (time(NULL) - p->current_phase->started);
-
-    // second line of w_total
-    int total_elapsed = p->study_phases * STUDYDURATION;
-    // add current session to total time if it's a study session
-    if (p->current_phase->is_study)
-      total_elapsed += phase_elapsed;
-
-    // update the parameters struct
-    p->phase_elapsed = phase_elapsed;
-    p->study_elapsed = total_elapsed + p->previous_elapsed;
-
-    if (phase_elapsed / 60 > p->current_phase->duration)
+    if (p->time_paused)
     {
-      // one phase has been completed
-      p->current_phase->completed++;
-      // force windows reload
-      p->windows_force_reload = 1;
-      // shall the phase count toward the maximum?
+      // stall elapsed time
+      p->current_phase->started = time(NULL) - p->frozen_elapsed;
+    }
+    else
+    {
+      int phase_elapsed;
+      // calculate minutes elapsed
+      phase_elapsed = time(NULL) - p->current_phase->started;
+      // second line of w_total
+      int total_elapsed = p->study_phases * STUDYDURATION;
+      // add current session to total time if it's a study session
       if (p->current_phase->is_study)
-      {
-        // yes
-        p->study_phases++;
-        // make a short series of beeps
-        beep(3, 5);
-      }
-      else
-      {
-        // make a fast series of beeps
-        beep(5, 3);
-      }
+        total_elapsed += phase_elapsed;
 
-      // check if this phase must be repeated
-      if (p->current_phase->completed >= p->current_phase->repetitions && p->current_phase->repetitions > 0)
-      {
-        // repetitions have ended
-        p->current_phase->completed = 0;
-        p->current_phase = p->current_phase->next_after;
-      }
-      else
-      {
-        // no repetitions or repetitions already finished
-        p->current_phase = p->current_phase->next;
-      }
+      // update the parameters struct
+      p->phase_elapsed = phase_elapsed;
+      p->study_elapsed = total_elapsed + p->previous_elapsed;
 
-      // erase windows
-      windowClear(p->w_phase);
-      windowClear(p->w_total);
+      if (phase_elapsed / 60 > p->current_phase->duration)
+      {
+        // phase has been completed
+        // go to next
+        next_phase(p);
+        // force windows update
+        p->windows_force_reload = 1;
 
-      p->current_phase->started = time(NULL);
+        p->current_phase->started = time(NULL);
+      }
     }
 
     msec_sleep(SLEEP_INTERVAL);
@@ -668,6 +741,7 @@ void *save_routine(void *args)
 void *keypress_routine(void *args)
 {
   Parameters *p = args;
+
   while (loop)
   {
     if (sigint_called)
@@ -704,6 +778,30 @@ void *keypress_routine(void *args)
       }
     }
 
+    char key;
+    // wait for exclusive use of terminal
+    pthread_mutex_lock(p->terminal_lock);
+    // unlock terminal
+    pthread_mutex_unlock(p->terminal_lock);
+
+    key = poll_keypress();
+    if (key >= 65 && key <= 90)
+      key += 32;
+
+    if (key == 'p')
+    {
+      p->time_paused = ~p->time_paused;
+
+      if (p->time_paused)
+      {
+        p->frozen_elapsed = (time(NULL) - p->current_phase->started);
+      }
+    }
+    else if (key == 's')
+    {
+      next_phase(p);
+    }
+
     msec_sleep(SLEEP_INTERVAL);
   }
 
@@ -718,9 +816,13 @@ int main()
   sigint_called = 0;
   // init random seed
   srand(time(NULL));
+  // start
 
   // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
+  // set raw mode
+  enter_raw_mode();
+
   pthread_t show_thread, advance_thread, save_thread, keypress_thread;
   Phase phases[3], *current_phase;
   Parameters *p;
@@ -733,6 +835,7 @@ int main()
   w_phase = createWindow(X_BORDER, Y_BORDER);
   windowSetAlignment(w_phase, 0);
   windowSetPadding(w_phase, PADDING);
+  windowSetFGcolor(w_phase, fg_RED);
   // w_phase keeping track of total time
   w_total = createWindow(0, 0);
   windowSetAlignment(w_total, 0);
@@ -745,6 +848,7 @@ int main()
   windowSetAutoWidth(w_quote, 0);
   windowSetFGcolor(w_quote, fg_BRIGHT_BLUE);
   windowSetTextStyle(w_quote, text_ITALIC);
+  get_random_quote(w_quote);
   // window with info
   w_info = createWindow(0, 0);
   windowSetAlignment(w_info, 0);
@@ -752,7 +856,6 @@ int main()
   windowSetAutoWidth(w_info, 0);
   windowSetFGcolor(w_info, fg_BRIGHT_GREEN);
   windowAddLine(w_info, "press S to skip, P to pause, ctrl+c to exit");
-
   // pack the parameters
   p = init_parameters(current_phase, w_phase, w_total, w_quote, w_info);
 
@@ -787,10 +890,13 @@ int main()
   pthread_create(&save_thread, NULL, save_routine, (void *)p);
   pthread_create(&keypress_thread, NULL, keypress_routine, (void *)p);
 
+  // start counting time
+  reset_current_time(p);
+  start_time(p);
+
   // Main thread IDLE
   while (loop || p->show_r || p->advance_r || p->save_r || p->keypress_r)
   {
-    erase_at(0, 0, 2);
     msec_sleep(25);
   }
 
@@ -799,7 +905,9 @@ int main()
   deleteWindow(w_phase);
   deleteWindow(w_total);
   deleteWindow(w_quote);
+
   // reset all terminal
+  exit_raw_mode();
   reset_styles();
   clear_terminal();
   show_cursor();
