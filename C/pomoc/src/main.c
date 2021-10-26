@@ -336,7 +336,7 @@ void format_local_time(char *buffer)
 /* Get random quote and save into window */
 int get_random_quote(Window *w)
 {
-  char r_buffer[BUFLEN];
+  char r_buffer[BUFLEN], l_buffer[BUFLEN];
   int rindex, count;
   FILE *fp;
 
@@ -364,7 +364,6 @@ int get_random_quote(Window *w)
       {
         if (r_buffer[i] == '\n')
         {
-          r_buffer[i] = '\0';
           line_end = i;
           break;
         }
@@ -376,24 +375,27 @@ int get_random_quote(Window *w)
       {
         if (r_buffer[i] == '@')
         {
-          r_buffer[i] = '\0';
           author_start = i + 1;
           break;
         }
       }
 
+      // copy quote to buffer
+      for (int i = 0; i < author_start - 1; i++)
+        l_buffer[i] = r_buffer[i];
+      l_buffer[author_start - 1] = '\0';
+
       // copy quote into destination
-      windowAddLine(w, r_buffer);
+      windowAddLine(w, l_buffer);
 
-      // find author in buffer
-      for (int i = 0; i < line_end - author_start; i++)
+      // copy author to buffer
+      for (int i = author_start; i < line_end; i++)
       {
-        r_buffer[i] = r_buffer[i + author_start];
+        l_buffer[i - author_start] = r_buffer[i];
       }
-      r_buffer[line_end - author_start] = '\0';
-
+      l_buffer[line_end - author_start] = '\0';
       // copy author into destination
-      windowAddLine(w, r_buffer);
+      windowAddLine(w, l_buffer);
 
       break;
     }
@@ -880,6 +882,11 @@ void *keypress_routine(void *args)
       p->time_paused = 0;
       p->windows_force_reload = 1;
     }
+    else if (key == 'q')
+    {
+      get_random_quote(p->w_quote);
+      p->windows_force_reload = 1;
+    }
 
     msec_sleep(SLEEP_INTERVAL);
   }
@@ -892,15 +899,6 @@ int main()
 {
   // init random seed
   srand(time(NULL));
-  // start
-
-  // handle signal interrupt
-  signal(SIGINT, SIGINT_handler);
-  // handle terminal resize
-  signal(SIGWINCH, SIGWINCH_handler);
-  // setup callback flags
-  sigint_called = 0;
-  sigwinch_called = 0;
 
   // set raw mode
   enter_raw_mode();
@@ -937,7 +935,7 @@ int main()
   windowSetPadding(w_info, PADDING);
   windowSetAutoWidth(w_info, 0);
   windowSetFGcolor(w_info, fg_BRIGHT_GREEN);
-  windowAddLine(w_info, "press S to skip, P to pause, ctrl+c to exit");
+  windowAddLine(w_info, "press S to skip, P to pause, Q to get and new quote, ctrl+c to exit");
   // window with current status
   w_status = createWindow(0, 0);
   windowSetAlignment(w_status, 0);
@@ -973,6 +971,14 @@ int main()
     if (ret)
       load_save(p, phases);
   }
+
+  // handle signal interrupt
+  signal(SIGINT, SIGINT_handler);
+  // handle terminal resize
+  signal(SIGWINCH, SIGWINCH_handler);
+  // setup callback flags
+  sigint_called = 0;
+  sigwinch_called = 0;
 
   //start the loop
   p->loop = 1;
