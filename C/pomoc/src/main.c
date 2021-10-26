@@ -31,6 +31,7 @@ typedef struct parameters
   pthread_mutex_t *terminal_lock;                          // terminal lock using mutex
   Phase *current_phase;                                    // current phase of the timer
   Window *w_phase, *w_total, *w_quote, *w_info, *w_status; // displayed windows
+  int loop;                                                // are the routines looping?
   int show_r, advance_r, save_r, keypress_r;               // return values of threads
   int study_phases;                                        // amount of currently studied phases
   int windows_force_reload;                                // flag to force redraw of the windows
@@ -56,8 +57,9 @@ const int SLEEP_INTERVAL = 100; // threads sleep time, msec
 #define QUOTES_PATH ".QUOTES"
 #define SAVE_PATH ".SAVE"
 
-volatile int loop;
+// global variables are bad but how could I use interrupts otherwise?
 volatile int sigint_called;
+volatile int sigwinch_called;
 
 /* Functions declaration */
 int file_read_line(char *buffer, int max_bytes, FILE *fp);
@@ -126,9 +128,13 @@ int file_count_lines(FILE *fp)
 
 void SIGINT_handler()
 {
-  if (loop)
-    sigint_called = 1;
+  sigint_called = 1;
+  return;
+}
 
+void SIGWINCH_handler()
+{
+  sigwinch_called = 1;
   return;
 }
 
@@ -578,7 +584,7 @@ void *show_routine(void *args)
 {
   Parameters *p = args;
 
-  while (loop)
+  while (p->loop)
   {
     char buffer[BUFLEN];
     char num_buffer[BUFLEN];
@@ -656,19 +662,19 @@ void *show_routine(void *args)
       windowSetVisibility(p->w_status, p->time_paused);
       windowAutoResize(p->w_status);
 
+      // wait for exclusive use of terminal
+      pthread_mutex_lock(p->terminal_lock);
       // clear terminal
       clear_terminal();
 
-      // display all
-
-      // wait for exclusive use of terminal
-      pthread_mutex_lock(p->terminal_lock);
+      // clear all windows
       windowClear(p->w_phase);
       windowClear(p->w_total);
       windowClear(p->w_quote);
       windowClear(p->w_info);
       windowClear(p->w_status);
 
+      // display all
       windowShow(p->w_phase);
       windowShow(p->w_total);
       windowShow(p->w_quote);
@@ -692,7 +698,7 @@ void *show_routine(void *args)
 void *advance_routine(void *args)
 {
   Parameters *p = args;
-  while (loop)
+  while (p->loop)
   {
     if (p->time_paused)
     {
@@ -737,10 +743,10 @@ void *save_routine(void *args)
 {
   Parameters *p = args;
   time_t last_save = 0;
-  while (loop)
+  while (p->loop)
   {
 
-    if (time(NULL) - last_save > SAVEINTERVAL)
+    if (time(NULL) - last_save > SAVEINTERVAL / 1000)
     {
       save_stats(p);
       last_save = time(NULL);
@@ -758,7 +764,7 @@ void *keypress_routine(void *args)
 {
   Parameters *p = args;
 
-  while (loop)
+  while (p->loop)
   {
     if (sigint_called)
     {
@@ -785,7 +791,7 @@ void *keypress_routine(void *args)
 
       if (ret == 1)
       {
-        loop = 0;
+        p->loop = 0;
       }
       else
       {
@@ -798,6 +804,11 @@ void *keypress_routine(void *args)
 
         p->windows_force_reload = 1;
       }
+    }
+    else if (sigwinch_called)
+    {
+      sigwinch_called = 0;
+      p->windows_force_reload = 1;
     }
 
     char key;
@@ -874,14 +885,18 @@ void *keypress_routine(void *args)
 
 int main()
 {
-  // setup callback flag
-  sigint_called = 0;
   // init random seed
   srand(time(NULL));
   // start
 
   // handle signal interrupt
   signal(SIGINT, SIGINT_handler);
+  // handle terminal resize
+  signal(SIGWINCH, SIGWINCH_handler);
+  // setup callback flags
+  sigint_called = 0;
+  sigwinch_called = 0;
+
   // set raw mode
   enter_raw_mode();
 
@@ -949,14 +964,13 @@ int main()
     dialogClear(d);
     deleteDialog(d);
 
+    // load stats from file
     if (ret)
-    { // load stats from file
-      ret = load_save(p, phases);
-    }
+      load_save(p, phases);
   }
 
   //start the loop
-  loop = 1;
+  p->loop = 1;
 
   // spawn threads
   pthread_create(&show_thread, NULL, show_routine, (void *)p);
@@ -967,7 +981,7 @@ int main()
   reset_current_time(p);
   start_time(p);
   // Main thread IDLE
-  while (loop || p->show_r || p->advance_r || p->save_r || p->keypress_r)
+  while (p->show_r || p->advance_r || p->save_r || p->keypress_r)
   {
     msec_sleep(25);
   }
