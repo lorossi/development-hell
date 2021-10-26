@@ -688,7 +688,8 @@ char poll_keypress()
 }
 
 /* Polls special key presses. Return value: the 8 lsb represent (from left to right):
-BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP */
+BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP.
+Needs to be in raw mode.  */
 char poll_special_keypress()
 {
   char key;
@@ -774,7 +775,8 @@ char poll_special_keypress()
   return pressed;
 }
 
-/* Awaits a keypress. A message is prompted on the terminal. Pass NULL to skip. */
+/* Awaits a keypress. A message is prompted on the terminal. Pass NULL to skip.
+Needs to be in raw mode. */
 int await_keypress(char *s)
 {
   if (s != NULL)
@@ -783,12 +785,10 @@ int await_keypress(char *s)
   int read_bytes;
   char *buffer[1];
 
-  enter_raw_mode();
   do
   {
     read_bytes = read(0, buffer, 1);
   } while (read_bytes == 0);
-  exit_raw_mode();
 
   return read_bytes;
 }

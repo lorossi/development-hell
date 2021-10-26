@@ -315,6 +315,9 @@ int _windowLinesUnbuffer(Window *w)
 /* Private function. Clears a window buffer. */
 void _windowClearUnbuffered(Window *w)
 {
+  for (int i = 0; i < w->buffer_size; i++)
+    _stringCopy(w->lines_buffer[i], "");
+
   w->buffer_size = 0;
 }
 
