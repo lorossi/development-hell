@@ -66,23 +66,36 @@ double _min_3(double a, double b, double c)
   return _min(_min(a, b), c);
 }
 
+/* Private function. Basically a re-definition of strlen */
+int _stringLength(char *s)
+{
+  int count = 0;
+  while (1)
+  {
+    if (s[++count] == '\0')
+      return count--;
+  }
+}
+
 /* Private function. Basically a re-definition of strncpy */
 int _stringCopyNBytes(char *dest, char *source, int start, int end)
 {
-  if (start < 0 || start > strlen(source))
+  const int source_len = _stringLength(source);
+
+  if (start < 0 || start > source_len)
     return -1;
 
-  if (end > strlen(source) || end == -1)
-    end = strlen(source);
+  if (end > source_len || end == -1)
+    end = source_len;
 
   if (start >= end)
     return -1;
 
-  for (int i = start; i < end; i++)
+  for (int i = start; i <= end; i++)
     dest[i - start] = source[i];
 
-  if (dest[end + 1] != '\0')
-    dest[end + 1] = '\0';
+  if (end < source_len)
+    dest[end - start + 1] = '\0';
 
   return end - start;
 }
@@ -96,7 +109,7 @@ int _stringCopy(char *dest, char *source)
 /* Private function. Find first space, going backwards from start, in a string. */
 int _stringFindFirstSpace(char *s, int start)
 {
-  if (start < 0 || start >= strlen(s))
+  if (start < 0 || start >= _stringLength(s))
     return -1;
 
   for (int i = start; i >= 0; i--)
@@ -112,7 +125,7 @@ int _stringFindFirstSpace(char *s, int start)
 void _stringPad(char *dest, char *source, int chars)
 {
   char buffer[MAX_WIDTH];
-  const int len = strlen(source);
+  const int len = _stringLength(source);
 
   for (int i = 0; i < chars; i++)
     buffer[i] = ' ';
@@ -130,7 +143,7 @@ void _stringPad(char *dest, char *source, int chars)
 void _stringTrim(char *dest, char *source)
 {
   int start, end;
-  const int len = strlen(source);
+  const int len = _stringLength(source);
 
   start = 0;
   end = len;
@@ -165,9 +178,9 @@ int _windowCalculateLongestLine(Window *w)
 
   for (int i = 0; i < w->buffer_size; i++)
   {
-    if (strlen(w->lines_buffer[i]) > longest)
+    if (_stringLength(w->lines_buffer[i]) > longest)
     {
-      longest = strlen(w->lines_buffer[i]);
+      longest = _stringLength(w->lines_buffer[i]);
     }
   }
 
@@ -256,7 +269,7 @@ int _windowLinesWrap(Window *w)
   for (int i = 0; i < w->buffer_size; i++)
   {
     _stringTrim(w->lines_buffer[i], w->lines_buffer[i]);
-    const int len = strlen(w->lines_buffer[i]);
+    const int len = _stringLength(w->lines_buffer[i]);
 
     // if the line is too long
     if (len > width)
@@ -268,16 +281,26 @@ int _windowLinesWrap(Window *w)
       {
         // try to look for the first break point, the closest space
         int end = _stringFindFirstSpace(w->lines_buffer[i], current_pos + width);
-        // if there isn't any space, take the whole line
+
         if (end == -1)
+        {
+          // if there isn't any space, take the whole line
+          // make sure it's in bound of the buffer
           end = _min(width, len) + current_pos;
+        }
+        else
+        {
+          // decrement by one to not include the space itself
+          end--;
+        }
 
         // copy to display lines
         _stringCopyNBytes(w->display_lines[current], w->lines_buffer[i], current_pos, end);
 
         // continue to following lines
         current++;
-        current_pos += end - current_pos + 1;
+        // keep going to the char after the space
+        current_pos += end - current_pos + 2;
       }
     }
     else
@@ -315,9 +338,6 @@ int _windowLinesUnbuffer(Window *w)
 /* Private function. Clears a window buffer. */
 void _windowClearUnbuffered(Window *w)
 {
-  for (int i = 0; i < w->buffer_size; i++)
-    _stringCopy(w->lines_buffer[i], "");
-
   w->buffer_size = 0;
 }
 
@@ -557,7 +577,7 @@ Rectangle get_terminal_size()
 /* Moves cursor to x, y coordinates (zero-indexed). */
 void move_cursor_to(int x, int y)
 {
-  printf(ESCAPE "[%i;%iH", y, x + 1);
+  printf(ESCAPE "[%i;%iH", y + 1, x + 1);
   fflush(NULL);
 
   return;
@@ -691,7 +711,8 @@ char poll_keypress()
 }
 
 /* Polls special key presses. Return value: the 8 lsb represent (from left to right):
-BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP */
+BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP.
+Needs to be in raw mode.  */
 char poll_special_keypress()
 {
   char key;
@@ -777,7 +798,8 @@ char poll_special_keypress()
   return pressed;
 }
 
-/* Awaits a keypress. A message is prompted on the terminal. Pass NULL to skip. */
+/* Awaits a keypress. A message is prompted on the terminal. Pass NULL to skip.
+Needs to be in raw mode. */
 int await_keypress(char *s)
 {
   if (s != NULL)
@@ -786,12 +808,10 @@ int await_keypress(char *s)
   int read_bytes;
   char *buffer[1];
 
-  enter_raw_mode();
   do
   {
     read_bytes = read(0, buffer, 1);
   } while (read_bytes == 0);
-  exit_raw_mode();
 
   return read_bytes;
 }
@@ -1024,11 +1044,7 @@ int windowDeleteLine(Window *w, int line_count)
 /* Deletes a all the lines of text in the window. Returns -1 in case of error. */
 int windowDeleteAllLines(Window *w)
 {
-  for (int i = 0; i < w->buffer_size; i++)
-    _stringCopy(w->lines_buffer[i], "");
-
   w->buffer_size = 0;
-
   return 0;
 }
 
@@ -1079,7 +1095,7 @@ void windowShow(Window *w)
   for (int i = 0; i < w->buffer_size; i++)
   {
     // calculate line length
-    const int ll = strlen(w->display_lines[i]);
+    const int ll = _stringLength(w->display_lines[i]);
     // calculate spacing according to alignment
     int spacing = _windowCalculateSpacing(w, ll);
     // calculate line coordinates
@@ -1175,10 +1191,10 @@ void dialogClear(Dialog *d)
     windowClear(d->buttons[i]);
 }
 
-/* Set yes/no buttons for the dialog. */
+/* Set buttons for the dialog. */
 void dialogSetButtons(Dialog *d, char *yes, char *no)
 {
-  char buffer[100];
+  char buffer[MAX_WIDTH];
 
   windowDeleteAllLines(d->buttons[0]);
   windowDeleteAllLines(d->buttons[1]);
