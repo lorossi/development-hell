@@ -4,19 +4,36 @@ def main():
 
     quotes = []
     for line in raw_quotes:
+
         if not line:
             continue
 
-        line = ". ".join(line.split(". ")[1:])  # remove number
+        if len(line) < 30:
+            print(f"Skipping line {line} as it's too short")
+            continue
 
+        # remove multiple whitespaces
         while "  " in line:
             line = line.replace("  ", " ")
 
-        line = line.replace("\"", "'")
-        line = line.replace(" –", "@~")
+        # remove quotations marks
+        to_remove = ["\"", "“", "”"]
+        for r in to_remove:
+            line = line.replace(r, "")
+
+        # separate author from quote
+        line = line.replace(" -", "@~")
+
+        # strip line
         line = line.strip()
 
+        # append line to list of quotes
         quotes.append(line)
+
+    # remove duplicates
+    quotes = list(set(quotes))
+    # sort list
+    quotes.sort()
 
     with open(".QUOTES", "w") as f:
         for line in quotes:
