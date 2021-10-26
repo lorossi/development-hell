@@ -6,5 +6,5 @@
   - use the new `beep` function in code
 - ~~Add automatic save/restore on quit~~
 - ~~Add quit confirmation~~
-- Add possibility to pause/skip/restart
+- ~~Add possibility to pause/skip/restart~~
 - Add custom values for time (maybe via argv)

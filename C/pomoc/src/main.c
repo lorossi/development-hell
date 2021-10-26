@@ -76,6 +76,7 @@ void format_elapsed_time(int elapsed, char *buffer);
 void format_local_time(char *buffer);
 int get_random_quote(Window *w);
 void format_date(char *buffer);
+void next_phase(Parameters *p);
 int save_stats(Parameters *p);
 int check_save();
 int load_save(Parameters *p, Phase *phases);
@@ -275,16 +276,18 @@ void next_phase(Parameters *p)
 
   // one phase has been completed
   p->current_phase->completed++;
-  // force windows reload
-  p->windows_force_reload = 1;
-  // shall the phase count toward the maximum?
 
+  // shall the phase count toward the maximum?
   // yes
   if (p->current_phase->is_study)
+  {
     p->study_phases++;
+    // update the total time until now
+    p->previous_elapsed += p->phase_elapsed;
+  }
 
   // check if this phase must be repeated
-  if (p->current_phase->completed >= p->current_phase->repetitions && p->current_phase->repetitions > 0)
+  if (p->current_phase->completed >= p->current_phase->repetitions && p->current_phase->repetitions)
   {
     // repetitions have ended
     p->current_phase->completed = 0;
@@ -708,16 +711,19 @@ void *advance_routine(void *args)
     else
     {
       int phase_elapsed;
-      // calculate minutes elapsed
+      // calculate seconds elapsed
       phase_elapsed = time(NULL) - p->current_phase->started;
-      // second line of w_total
-      int total_elapsed = p->study_phases * STUDYDURATION;
+
+      // second line of w_total, total time spent studying
+      int total_elapsed = 0;
       // add current session to total time if it's a study session
       if (p->current_phase->is_study)
-        total_elapsed += phase_elapsed;
+        total_elapsed = phase_elapsed;
 
       // update the parameters struct
+      // time in the current phase
       p->phase_elapsed = phase_elapsed;
+      // total time studied today, until this very moment
       p->study_elapsed = total_elapsed + p->previous_elapsed;
 
       if (phase_elapsed / 60 > p->current_phase->duration)
@@ -725,10 +731,8 @@ void *advance_routine(void *args)
         // phase has been completed
         // go to next
         next_phase(p);
-        // force windows update
+        // force windows reload
         p->windows_force_reload = 1;
-
-        p->current_phase->started = time(NULL);
       }
     }
 
@@ -868,6 +872,7 @@ void *keypress_routine(void *args)
       // show windows again
       // wait for exclusive use of terminal
       pthread_mutex_lock(p->terminal_lock);
+      clear_terminal();
       toggle_all_windows(p, 1);
       // unlock terminal
       pthread_mutex_unlock(p->terminal_lock);
