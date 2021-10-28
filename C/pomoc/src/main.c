@@ -579,7 +579,7 @@ void *beep_async(void *args)
     pthread_mutex_lock(terminal_lock);
     terminal_beep();
     pthread_mutex_unlock(terminal_lock);
-    msec_sleep(200);
+    msec_sleep(300);
   }
   pthread_exit(0);
 }
@@ -728,7 +728,7 @@ void *advance_routine(void *args)
       // total time studied today, until this very moment
       p->study_elapsed = total_elapsed + p->previous_elapsed;
 
-      if (phase_elapsed / 60 > p->current_phase->duration)
+      if (phase_elapsed / 60 >= p->current_phase->duration)
       {
         // phase has been completed
         // go to next
