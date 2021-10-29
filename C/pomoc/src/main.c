@@ -841,6 +841,11 @@ void *keypress_routine(void *args)
       }
       // force windows refresh
       p->windows_force_reload = 1;
+
+      // make some noise
+      pthread_t beep_thread;
+      pthread_create(&beep_thread, NULL, beep_async, p->terminal_lock);
+      pthread_detach(beep_thread);
     }
     else if (key == 's')
     {
