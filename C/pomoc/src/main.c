@@ -1,7 +1,7 @@
 #define _DEFAULT_SOURCE // for nanosleep
 
 #include <stdio.h>
-#include <time.h>
+#include <time.h>    // for timespec
 #include <signal.h>  // for signal()
 #include <unistd.h>  // for nanosleep()
 #include <pthread.h> // for multithread
@@ -26,11 +26,18 @@ typedef struct phase
   struct phase *next_after;
 } Phase;
 
-typedef struct parameters
+typedef struct
+{
+  int repetitions; // number of tones
+  int speed;       // int in range [0-10]
+} Tone;
+
+typedef struct
 {
   pthread_mutex_t *terminal_lock;                          // terminal lock using mutex
   Phase *current_phase;                                    // current phase of the timer
   Window *w_phase, *w_total, *w_quote, *w_info, *w_status; // displayed windows
+  Tone *tone;                                              // handles tone parameters
   int loop;                                                // are the routines looping?
   int show_r, advance_r, save_r, keypress_r;               // return values of threads
   int study_phases;                                        // amount of currently studied phases
@@ -215,6 +222,10 @@ Parameters *init_parameters(Phase *current_phase, Window *w_phase, Window *w_tot
   p->terminal_lock = malloc(sizeof(*(p->terminal_lock)));
   pthread_mutex_init(p->terminal_lock, NULL);
 
+  p->tone = malloc(sizeof(*(p->tone)));
+  p->tone->repetitions = 0;
+  p->tone->speed = 0;
+
   p->current_phase = current_phase;
   p->study_phases = 0;
   p->study_elapsed = 0;
@@ -271,7 +282,7 @@ void start_time(Parameters *p)
 void next_phase(Parameters *p)
 {
   pthread_t beep_thread;
-  pthread_create(&beep_thread, NULL, beep_async, p->terminal_lock);
+  pthread_create(&beep_thread, NULL, beep_async, p);
   pthread_detach(beep_thread);
 
   // one phase has been completed
@@ -573,13 +584,14 @@ void toggle_all_windows(Parameters *p, int visibility)
 /* Async beeping */
 void *beep_async(void *args)
 {
-  pthread_mutex_t *terminal_lock = args;
-  for (int i = 0; i < 5; i++)
+  Parameters *p = args;
+  const int delay = (1 - p->tone->speed / 10.0) * 700 + 300;
+  for (int i = 0; i < p->tone->repetitions; i++)
   {
-    pthread_mutex_lock(terminal_lock);
+    pthread_mutex_lock(p->terminal_lock);
     terminal_beep();
-    pthread_mutex_unlock(terminal_lock);
-    msec_sleep(300);
+    pthread_mutex_unlock(p->terminal_lock);
+    msec_sleep(delay);
   }
   pthread_exit(0);
 }
@@ -720,7 +732,18 @@ void *advance_routine(void *args)
       int total_elapsed = 0;
       // add current session to total time if it's a study session
       if (p->current_phase->is_study)
+      {
         total_elapsed = phase_elapsed;
+        // next phase is a study phase, set tone accordingly
+        p->tone->speed = 3;
+        p->tone->repetitions = 4;
+      }
+      else
+      {
+        // the next phase is a pause, set tone accordingly
+        p->tone->speed = 10;
+        p->tone->repetitions = 5;
+      }
 
       // update the parameters struct
       // time in the current phase
@@ -733,6 +756,8 @@ void *advance_routine(void *args)
         // phase has been completed
         // go to next
         next_phase(p);
+        // load a new quote
+        get_random_quote(p->w_quote);
         // force windows reload
         p->windows_force_reload = 1;
       }
@@ -841,11 +866,6 @@ void *keypress_routine(void *args)
       }
       // force windows refresh
       p->windows_force_reload = 1;
-
-      // make some noise
-      pthread_t beep_thread;
-      pthread_create(&beep_thread, NULL, beep_async, p->terminal_lock);
-      pthread_detach(beep_thread);
     }
     else if (key == 's')
     {
@@ -884,8 +904,11 @@ void *keypress_routine(void *args)
       // unlock terminal
       pthread_mutex_unlock(p->terminal_lock);
 
+      // update flags
       p->time_paused = 0;
       p->windows_force_reload = 1;
+      // reset tone
+      p->tone->repetitions = 1;
     }
     else if (key == 'q')
     {
