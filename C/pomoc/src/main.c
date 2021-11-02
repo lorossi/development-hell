@@ -11,7 +11,7 @@
 #include "terminal.h"
 
 /* Structs declaration */
-typedef struct
+typedef struct phase
 {
   char *name;
   int id;
