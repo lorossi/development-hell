@@ -383,7 +383,7 @@ void test_HSL()
   y = 0;
   for (int h = 0; h < 360; h += inc)
   {
-    for (int s = 100; s >= 0; s -= inc)
+    for (int s = 99; s >= 0; s -= inc)
     {
       HSL color = createHSLcolor(h, s, 50);
 
@@ -512,32 +512,32 @@ int main()
   hide_cursor();
   clear_terminal();
 
-  test_windows();
-  await_keypress("\nPress a button to continue");
+  // test_windows();
+  // await_keypress("\nPress a button to continue");
 
-  test_colors();
-  await_keypress("\nPress a button to continue");
+  // test_colors();
+  // await_keypress("\nPress a button to continue");
 
-  test_textmodes();
-  await_keypress("\nPress a button to continue");
+  // test_textmodes();
+  // await_keypress("\nPress a button to continue");
 
-  test_mixed();
-  await_keypress("\nPress a button to continue");
+  // test_mixed();
+  // await_keypress("\nPress a button to continue");
 
-  test_RGB();
-  await_keypress("\nPress a button to continue");
+  // test_RGB();
+  // await_keypress("\nPress a button to continue");
 
   test_HSL();
   await_keypress("\nPress a button to continue");
 
-  test_hue();
-  await_keypress("\nPress a button to continue");
+  // test_hue();
+  // await_keypress("\nPress a button to continue");
 
-  starry_night();
-  await_keypress("\nPress a button to continue");
+  // starry_night();
+  // await_keypress("\nPress a button to continue");
 
-  dialog();
-  await_keypress("\nPress a button to continue");
+  // dialog();
+  // await_keypress("\nPress a button to continue");
 
   show_cursor();
   exit_raw_mode();

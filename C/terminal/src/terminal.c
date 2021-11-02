@@ -1,16 +1,18 @@
 #include "terminal.h"
 
-// Definition of private functions
+// Definition of private functions, so that linter and compiler are happy
+
 double _hue_to_rgb(double p, double q, double t);
 double _max(double a, double b);
 double _min(double a, double b);
 double _max_3(double a, double b, double c);
 double _min_3(double a, double b, double c);
+double _clamp(double val, double min, double max);
 int _stringCopyNBytes(char *dest, char *source, int start, int end);
 int _stringCopy(char *dest, char *source);
 int _stringFindFirstSpace(char *s, int start);
 void _stringPad(char *dest, char *source, int chars);
-void _stringTrim(char *dest, char *source);
+int _stringTrim(char *dest, char *source);
 int _windowCalculateLongestLine(Window *w);
 void _windowAutoWidth(Window *w, int longest);
 void _windowAutoHeight(Window *w);
@@ -20,7 +22,16 @@ int _windowLinesWrap(Window *w);
 int _windowLinesUnbuffer(Window *w);
 void _windowClearUnbuffered(Window *w);
 
-/* Private function. Used inside HSLtoRGB conversion. */
+/**
+ * @internal
+ * @brief Internal function. Used inside HSLtoRGB functions.
+ * Converts hue (from HSL format) to RGB color.
+ * 
+ * @param p 
+ * @param q 
+ * @param t 
+ * @return double 
+ */
 double _hue_to_rgb(double p, double q, double t)
 {
   if (t < 0)
@@ -38,7 +49,14 @@ double _hue_to_rgb(double p, double q, double t)
   return p;
 }
 
-/* Private function. Returns the maximum value between two. */
+/**
+ * @internal
+ * @brief Returns the maximum value between two.
+ * 
+ * @param a 
+ * @param b 
+ * @return double 
+ */
 double _max(double a, double b)
 {
   if (a > b)
@@ -46,7 +64,14 @@ double _max(double a, double b)
   return b;
 }
 
-/* Private function. Returns the minimum value between two. */
+/**
+ * @internal
+ * @brief Returns the minimum value between two.
+ * 
+ * @param a 
+ * @param b 
+ * @return double 
+ */
 double _min(double a, double b)
 {
   if (a < b)
@@ -54,19 +79,42 @@ double _min(double a, double b)
   return b;
 }
 
-/* Private function. Returns the maximum value between tree. */
+/**
+ * @internal
+ * @brief Returns the maximum value between three.
+ * 
+ * @param a 
+ * @param b 
+ * @param c 
+ * @return double 
+ */
 double _max_3(double a, double b, double c)
 {
   return _max(_max(a, b), c);
 }
 
-/* Private function. Returns the minimum value between tree. */
+/**
+ * @internal
+ * @brief Returns the minimum value between three.
+ * 
+ * @param a 
+ * @param b 
+ * @param c 
+ * @return double 
+ */
 double _min_3(double a, double b, double c)
 {
   return _min(_min(a, b), c);
 }
 
-/* Private function. Basically a re-definition of strlen */
+/**
+ * @internal
+ * @brief Returns the length of a string.
+ * Basically a redefinition o strlen.
+ * 
+ * @param s The string to text
+ * @return int Length of the string
+ */
 int _stringLength(char *s)
 {
   int count = 0;
@@ -77,7 +125,32 @@ int _stringLength(char *s)
   }
 }
 
-/* Private function. Basically a re-definition of strncpy */
+/**
+ * @internal
+ * @brief Clamps a value in a certain range.
+ * 
+ * @param val Value to be clamped
+ * @param min Minimum value of the result
+ * @param max Maximum value of the result
+ * @return double Clamped value
+ */
+double _clamp(double val, double min, double max)
+{
+  return _min(_max(val, min), max);
+}
+
+/**
+ * @internal
+ * @brief Copies N bytes o a string.
+ * Basically a redefinition of strncpy.
+ * The string is automatically character terminated.
+ * 
+ * @param dest Destination string, where the string will be saved
+ * @param source Source string
+ * @param start Starting character
+ * @param end Ending character. If -1, end gets set to end of string.
+ * @return int Number of copied characters
+ */
 int _stringCopyNBytes(char *dest, char *source, int start, int end)
 {
   const int source_len = _stringLength(source);
@@ -100,16 +173,34 @@ int _stringCopyNBytes(char *dest, char *source, int start, int end)
   return end - start;
 }
 
-/* Private function. Basically a re-definition of _stringCopy */
+/**
+ * @internal
+ * @brief Copies a string.
+ * The string is automatically character terminated.
+ * 
+ * @param dest Destination string, where the string will be saved
+ * @param source Source string
+ * @return int Number of copied characters
+ */
 int _stringCopy(char *dest, char *source)
 {
   return _stringCopyNBytes(dest, source, 0, -1);
 }
 
-/* Private function. Find first space, going backwards from start, in a string. */
+/**
+ * @internal
+ * @brief Finds first space in string, going backwards from end.
+ * 
+ * @param s String to test
+ * @param start Starting position. If -1, then the starting position is the last character of the string.
+ * @return int Position of the first space of -1 if no space found
+ */
 int _stringFindFirstSpace(char *s, int start)
 {
-  if (start < 0 || start >= _stringLength(s))
+  if (start == -1)
+    start = _stringLength(s);
+
+  if (start < 0)
     return -1;
 
   for (int i = start; i >= 0; i--)
@@ -121,7 +212,14 @@ int _stringFindFirstSpace(char *s, int start)
   return -1;
 }
 
-/* Private function. Pad string with spaces. */
+/**
+ * @internal
+ * @brief Pads string with spaces.
+ * 
+ * @param dest Destination string, where the string will be saved
+ * @param source Source string
+ * @param chars NUmber of spaces to be added
+ */
 void _stringPad(char *dest, char *source, int chars)
 {
   char buffer[MAX_WIDTH];
@@ -139,8 +237,15 @@ void _stringPad(char *dest, char *source, int chars)
   _stringCopy(dest, buffer);
 }
 
-/* Private function. Trim string. */
-void _stringTrim(char *dest, char *source)
+/**
+ * @internal
+ * @brief Trims string, removing start and end spaces.
+ * 
+ * @param dest Destination string, where the string will be saved
+ * @param source Source string
+ * @return int Number of removed characters
+ */
+int _stringTrim(char *dest, char *source)
 {
   int start, end;
   const int len = _stringLength(source);
@@ -148,7 +253,7 @@ void _stringTrim(char *dest, char *source)
   start = 0;
   end = len;
 
-  // find string start
+  // find actual string start
   for (int i = 0; i < len; i++)
   {
     if (source[i] != ' ')
@@ -158,7 +263,7 @@ void _stringTrim(char *dest, char *source)
     }
   }
 
-  // find string end
+  // find actual string end
   for (int i = len - 1; i > 0; i--)
   {
     if (source[i - 1] != ' ')
@@ -168,40 +273,67 @@ void _stringTrim(char *dest, char *source)
     }
   }
 
-  _stringCopyNBytes(dest, source, start, end);
+  int newlen;
+  newlen = _stringCopyNBytes(dest, source, start, end);
+
+  return newlen - len;
 }
 
-/* Private function. Calculates the width of a window. */
+/**
+ * @internal
+ * @brief Calculates the width of a window.
+ * 
+ * @param w Pointer to Window to be tested
+ * @return int Window external width, including border and padding
+ */
 int _windowCalculateLongestLine(Window *w)
 {
   int longest = 0;
 
-  for (int i = 0; i < w->buffer_size; i++)
+  for (int i = 0; i < w->lines; i++)
   {
-    if (_stringLength(w->lines_buffer[i]) > longest)
+    if (_stringLength(w->text_buffer[i]) > longest)
     {
-      longest = _stringLength(w->lines_buffer[i]);
+      longest = _stringLength(w->text_buffer[i]);
     }
   }
 
   return longest;
 }
 
-/* Private function. Auto resize a window width. */
+/**
+ * @internal
+ * @brief Automatically sets window width.
+ * 
+ * @param w Pointer to Window
+ * @param longest Longest line of text in the window
+ */
 void _windowAutoWidth(Window *w, int longest)
 {
   w->size.width = longest + 2 + w->padding * 2;
   return;
 }
 
-/* Private function. Auto resize a window height. */
+/**
+ * @internal
+ * @brief Automatically sets window height.
+ * 
+ * @param w Pointer to Window
+ */
 void _windowAutoHeight(Window *w)
 {
-  w->size.height = w->buffer_size + 2;
+  w->size.height = w->lines + 2;
   return;
 }
 
-/* Private function. Draw window border. */
+/**
+ * @internal
+ * @brief Draws window border, without clearing the window body.
+ * Text and background color must be set before calling this function.
+ * Terminal is automatically flushed every line.
+ * 
+ * @param w Pointer to Window to be drawn
+ */
 void _windowDrawBorder(Window *w)
 {
   const int width = w->size.width;
@@ -213,7 +345,7 @@ void _windowDrawBorder(Window *w)
     {
       if (y == 0)
       {
-        move_cursor_to(x + w->pos.x, y + w->pos.y);
+        move_cursor_to(x + w->position.x, y + w->position.y);
 
         // top line
         if (x == 0)
@@ -225,7 +357,7 @@ void _windowDrawBorder(Window *w)
       }
       else if (y == height - 1)
       {
-        move_cursor_to(x + w->pos.x, y + w->pos.y);
+        move_cursor_to(x + w->position.x, y + w->position.y);
 
         // bottom line
         if (x == 0)
@@ -237,15 +369,25 @@ void _windowDrawBorder(Window *w)
       }
       else if (x == 0 || x == width - 1)
       {
-        move_cursor_to(x + w->pos.x, y + w->pos.y);
+        move_cursor_to(x + w->position.x, y + w->position.y);
 
         printf("\u2502"); // vertical line
       }
     }
+
+    fflush(NULL);
   }
 }
 
-/* Private function. Calculate line spacing. */
+/**
+ * @internal
+ * @brief Calculates line spacing (spaces to add on the left hand side in order to
+ * satisfy the current window alignment settings).
+ * 
+ * @param w Pointer to Window 
+ * @param current_len Length of the current line
+ * @return int Number of spaces to be added
+ */
 int _windowCalculateSpacing(Window *w, int current_len)
 {
   if (w->alignment == -1)
@@ -260,16 +402,22 @@ int _windowCalculateSpacing(Window *w, int current_len)
   return 0;
 }
 
-/* Private function. Wrap lines. */
+/**
+ * @internal
+ * @brief Wrap lines in a window.
+ * 
+ * @param w pointer to window
+ * @return int Number of lines
+ */
 int _windowLinesWrap(Window *w)
 {
   int current = 0;
   const int width = w->size.width - 2 * w->padding - 2;
   // go over each line
-  for (int i = 0; i < w->buffer_size; i++)
+  for (int i = 0; i < w->lines; i++)
   {
-    _stringTrim(w->lines_buffer[i], w->lines_buffer[i]);
-    const int len = _stringLength(w->lines_buffer[i]);
+    _stringTrim(w->text_buffer[i], w->text_buffer[i]);
+    const int len = _stringLength(w->text_buffer[i]);
 
     // if the line is too long
     if (len > width)
@@ -280,7 +428,7 @@ int _windowLinesWrap(Window *w)
       while (current_pos < len)
       {
         // try to look for the first break point, the closest space
-        int end = _stringFindFirstSpace(w->lines_buffer[i], current_pos + width);
+        int end = _stringFindFirstSpace(w->text_buffer[i], current_pos + width);
 
         if (end == -1)
         {
@@ -295,7 +443,7 @@ int _windowLinesWrap(Window *w)
         }
 
         // copy to display lines
-        _stringCopyNBytes(w->display_lines[current], w->lines_buffer[i], current_pos, end);
+        _stringCopyNBytes(w->text[current], w->text_buffer[i], current_pos, end);
 
         // continue to following lines
         current++;
@@ -306,7 +454,7 @@ int _windowLinesWrap(Window *w)
     else
     {
       // simply copy into display line
-      _stringCopy(w->display_lines[current], w->lines_buffer[i]);
+      _stringCopy(w->text[current], w->text_buffer[i]);
       current++;
     }
   }
@@ -317,45 +465,84 @@ int _windowLinesWrap(Window *w)
   else if (current > w->size.height - 2)
     current = w->size.height - 2;
 
-  w->buffer_size = current;
+  w->lines = current;
 
   // copy back into display lines to prevent double wrapping
-  for (int i = 0; i < w->buffer_size; i++)
-    _stringCopy(w->lines_buffer[i], w->display_lines[i]);
+  for (int i = 0; i < w->lines; i++)
+    _stringCopy(w->text_buffer[i], w->text[i]);
 
   return current;
 }
 
-/* Private function. Copy lines from buffer to display */
+/**
+ * @internal
+ * @brief Copies lines from buffer to actual display.
+ * 
+ * @param w pointer to window
+ * @return int Number of lines of text
+ */
 int _windowLinesUnbuffer(Window *w)
 {
-  for (int i = 0; i < w->buffer_size; i++)
-    _stringCopy(w->display_lines[i], w->lines_buffer[i]);
+  for (int i = 0; i < w->lines; i++)
+    _stringCopy(w->text[i], w->text_buffer[i]);
 
-  return w->buffer_size;
+  return w->lines;
 }
 
-/* Private function. Clears a window buffer. */
+/**
+ * @internal
+ * @brief Clears a window buffer.
+ * 
+ * @param w pointer to window
+ */
 void _windowClearUnbuffered(Window *w)
 {
-  w->buffer_size = 0;
+  w->lines = 0;
 }
 
-/* Creates a RGB struct containing the three channels.
+/* 
 R, G, and B are in range 0-255. */
+
+/**
+ * @brief Creates a RGB struct containing the three channels.
+ * 
+ * @param R Red channel, in range 0-255
+ * @param G Green channel. in range 0-255
+ * @param B Blue channel, in range 0-255
+ * @return RGB 
+ */
 RGB createRGBcolor(int R, int G, int B)
 {
+  // clamp values just to make sure
+  R = _clamp(R, 0, 255);
+  G = _clamp(G, 0, 255);
+  B = _clamp(B, 0, 255);
   return (RGB){.R = R, .G = G, .B = B};
 }
 
-/* Creates a HSL struct containing the three channels. 
-H is in range 0-360, S and L are in range 0-100. */
+/**
+ * @brief Creates a HSL struct containing the three channels.
+ * 
+ * @param H Hue, in range 0-359
+ * @param S Saturation, in range 0-99
+ * @param L Lightness, in range 0-99
+ * @return HSL 
+ */
 HSL createHSLcolor(int H, int S, int L)
 {
+  H = _clamp(H, 0, 359);
+  S = _clamp(S, 0, 99);
+  L = _clamp(L, 0, 99);
   return (HSL){.H = H, .S = S, .L = L};
 }
 
-/* Creates a rectangle of set width and height. */
+/**
+ * @brief Creates a Rectangle object.
+ * 
+ * @param w Width of the rectangle
+ * @param h Height of the rectangle
+ * @return Rectangle 
+ */
 Rectangle createRectangle(int w, int h)
 {
   if (w < 0 || h < 0)
@@ -364,16 +551,28 @@ Rectangle createRectangle(int w, int h)
   return (Rectangle){.width = w, .height = h};
 }
 
-/* Creates a position struct. */
+/**
+ * @brief Creates a Position object.
+ * 
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @return Position 
+ */
 Position createPosition(int x, int y)
 {
   return (Position){.x = x, .y = y};
 }
 
-/* Creates a Window with set position. */
+/**
+ * @brief Creates a Window object.
+ * 
+ * @param x x coordinate of the top left corner
+ * @param y y coordinate of the top left corner
+ * @return Window* pointer to window
+ */
 Window *createWindow(int x, int y)
 {
-  Position pos = createPosition(x, y);
+  Position position = createPosition(x, y);
   Rectangle size = createRectangle(1, 1);
   // allocate space for window
   Window *w = malloc(sizeof(Window));
@@ -381,7 +580,7 @@ Window *createWindow(int x, int y)
   *w = (Window){
       .auto_width = 1,
       .auto_height = 1,
-      .buffer_size = 0,
+      .lines = 0,
       .padding = 1,
       .alignment = -1,
       .line_wrap = 1,
@@ -390,13 +589,17 @@ Window *createWindow(int x, int y)
       .bg_color = bg_DEFAULT,
       .text_style = text_DEFAUlT,
       .size = size,
-      .pos = pos,
+      .position = position,
   };
 
   return w;
 }
 
-/* Deletes a Window. */
+/**
+ * @brief Deletes a window, freeing the memory.
+ * 
+ * @param w pointer to window
+ */
 void deleteWindow(Window *w)
 {
   if (w)
@@ -404,7 +607,12 @@ void deleteWindow(Window *w)
   return;
 }
 
-/* Converts a HSL color into the RGB space. */
+/**
+ * @brief Converts a HSL color into the RGB space. 
+ * 
+ * @param color Color in HSL format
+ * @return RGB Color in RGB format
+ */
 RGB HSLtoRGB(HSL color)
 {
   double h, s, l;
@@ -433,7 +641,12 @@ RGB HSLtoRGB(HSL color)
   return createRGBcolor(r * 255, g * 255, b * 255);
 }
 
-/* Converts a RGB color into the HSL space. */
+/**
+ * @brief Converts a RGB color into the HSL space.
+ * 
+ * @param color Color in RGB format
+ * @return HSL Color in HSL format
+ */
 HSL RGBtoHSL(RGB color)
 {
   double r, g, b;
@@ -470,7 +683,23 @@ HSL RGBtoHSL(RGB color)
   return createHSLcolor(h * 60, s * 100, l * 100);
 }
 
-/* Makes the terminal go BEEP */
+/**
+ * @brief Converts hue into the RGB color space. 
+ * Saturation is set to 100 and Lightness is set to 50
+ * 
+ * @param hue 
+ * @return RGB 
+ */
+RGB HUEtoRGB(double hue)
+{
+  HSL color = createHSLcolor(hue, 100, 50);
+  return HSLtoRGB(color);
+}
+
+/**
+ * @brief Makes the terminal beep.
+ * 
+ */
 void terminal_beep()
 {
   fflush(NULL);
@@ -478,15 +707,10 @@ void terminal_beep()
   fflush(NULL);
 }
 
-/* Converts a color provided the hue into the RGB space. 
-Saturation and value are assumed to be respectively 100 and 50 */
-RGB HUEtoRGB(double hue)
-{
-  HSL color = createHSLcolor(hue, 100, 50);
-  return HSLtoRGB(color);
-}
-
-/* Clears the terminal and moves cursor to upper-left position. */
+/**
+ * @brief Clears the terminal and moves cursor to upper-left position.
+ * 
+ */
 void clear_terminal()
 {
   printf(CLEARALL);
@@ -495,8 +719,10 @@ void clear_terminal()
   return;
 };
 
-/* Hides the blinking cursor from the terminal, disabling also echo.
-Call show_cursor() to make it visible again. */
+/**
+ * @brief Hides the blinking cursor from the terminal, disabling also echo.
+ * 
+ */
 void hide_cursor()
 {
   // turn off echo
@@ -511,7 +737,10 @@ void hide_cursor()
   return;
 }
 
-/* Makes echo and terminals visible again. */
+/**
+ * @brief Shows echo and cursor again.
+ * 
+ */
 void show_cursor()
 {
   // turn on echo
@@ -526,7 +755,10 @@ void show_cursor()
   return;
 }
 
-/* Enters terminal raw mode. */
+/**
+ * @brief Enters terminal raw mode.
+ * 
+ */
 void enter_raw_mode()
 {
   struct termios raw;
@@ -538,7 +770,10 @@ void enter_raw_mode()
   fflush(NULL);
 }
 
-/* Leaves terminal raw mode. */
+/**
+ * @brief Exits terminal raw mode.
+ * 
+ */
 void exit_raw_mode()
 {
   struct termios raw;
@@ -550,7 +785,10 @@ void exit_raw_mode()
   fflush(NULL);
 }
 
-/* Moves the cursor to the bottom of the screen. */
+/**
+ * @brief Moves the cursor to the bottom of the screen.
+ * 
+ */
 void move_cursor_to_bottom()
 {
   Rectangle terminal_size = get_terminal_size();
@@ -560,7 +798,12 @@ void move_cursor_to_bottom()
   return;
 }
 
-/* Returns the current size of the terminal. If it's not available, returns -1. */
+/**
+ * @brief Returns the current size of the terminal as a rectangle. 
+ * If it's not available, returns -1.
+ * 
+ * @return Rectangle 
+ */
 Rectangle get_terminal_size()
 {
   struct winsize size;
@@ -574,7 +817,12 @@ Rectangle get_terminal_size()
   return createRectangle(-1, -1);
 };
 
-/* Moves cursor to x, y coordinates (zero-indexed). */
+/**
+ * @brief Moves cursor to x, y coordinates (zero-indexed).
+ * 
+ * @param x x coordinate for the cursor
+ * @param y y coordinate for the cursor
+ */
 void move_cursor_to(int x, int y)
 {
   printf(ESCAPE "[%i;%iH", y + 1, x + 1);
@@ -583,7 +831,10 @@ void move_cursor_to(int x, int y)
   return;
 };
 
-/* Resets all the previously set text styles (foreground color, background color and text modes). */
+/**
+ * @brief Resets all the previously set text styles (foreground color, background color and text modes).
+ * 
+ */
 void reset_styles()
 {
   reset_fg();
@@ -592,8 +843,12 @@ void reset_styles()
   return;
 }
 
-/* Set styles for the text. Accepts a variable number of styles.
-The first parameter must be the number of styles. */
+/**
+ * @brief Sets styles for the text. Accepts a variable number of styles.
+ * The first parameter must be the number of styles.
+ * 
+ * @param styles The wanted styles for the terminal
+ */
 void set_styles(style styles, ...)
 {
   va_list v;
@@ -609,7 +864,11 @@ void set_styles(style styles, ...)
   return;
 }
 
-/* Sets the foreground color of the text. */
+/**
+ * @brief Sets the color of the text.
+ * 
+ * @param color 
+ */
 void set_fg(style color)
 {
   if ((color >= 30 && color <= 39) || (color >= 90 && color <= 97))
@@ -617,7 +876,11 @@ void set_fg(style color)
   return;
 }
 
-/* Sets the background color of the text. */
+/**
+ * @brief Sets the background color of the text.
+ * 
+ * @param color 
+ */
 void set_bg(style color)
 {
   if ((color >= 40 && color <= 49) || (color >= 100 && color <= 107))
@@ -625,60 +888,97 @@ void set_bg(style color)
   return;
 }
 
-/* Sets the text mode. */
+/**
+ * @brief Sets the text mode.
+ * 
+ * @param mode 
+ */
 void set_textmode(style mode)
 {
   if (mode >= 0 && mode <= 9)
     printf(ESCAPE "[%im", mode);
 }
 
-/* Resets the foreground color of the text. */
+/**
+ * @brief Resets the foreground color of the text. 
+ * 
+ */
 void reset_fg()
 {
   set_fg(fg_DEFAULT);
   return;
 }
 
-/* Resets the background color of the text. */
+/**
+ * @brief Resets the background color of the text.
+ * 
+ */
 void reset_bg()
 {
   set_bg(bg_DEFAULT);
   return;
 }
 
-/* Resets the text mode. */
+/**
+ * @brief Resets the text mode.
+ * 
+ */
 void reset_textmode()
 {
   set_textmode(text_DEFAUlT);
 }
 
-/* Sets the foreground color of the text, according to the RGB values. */
+/**
+ * @brief Sets the foreground color of the text, according to the RGB values.
+ * 
+ * @param color RGB color
+ */
 void set_fg_RGB(RGB color)
 {
   printf(ESCAPE "[38;2;%i;%i;%im", color.R, color.G, color.B);
   return;
 }
 
-/* Sets the background color of the text, according to the RGB values. */
+/**
+ * @brief Sets the background color of the text, according to the RGB values. 
+ * 
+ * @param color RGB color
+ */
 void set_bg_RGB(RGB color)
 {
   printf(ESCAPE "[48;2;%i;%i;%im", color.R, color.G, color.B);
   return;
 }
 
+/**
+ * @brief Sets the foreground color of the text, according to the HSL values.
+ * 
+ * @param color HSL color
+ */
 void set_fg_HSL(HSL color)
 {
   RGB converted = HSLtoRGB(color);
   set_fg_RGB(converted);
 }
 
+/**
+ * @brief Sets the background color of the text, according to the HSL values. 
+ * 
+ * @param color HSL color
+ */
 void set_bg_HSL(HSL color)
 {
   RGB converted = HSLtoRGB(color);
   set_bg_RGB(converted);
 }
 
-/* Writes a string at certain x,y coordinates (zero-indexed). */
+/**
+ * @brief Writes a string at certain x,y coordinates (zero-indexed).
+ * 
+ * @param x x coordinate of the text
+ * @param y y coordinate of the text
+ * @param s string to print
+ */
 void write_at(int x, int y, char *s)
 {
   move_cursor_to(x, y);
@@ -687,7 +987,13 @@ void write_at(int x, int y, char *s)
   return;
 };
 
-/* Erases a set number of characters at certain x,y coordinates (zero-indexed). */
+/**
+ * @brief Erases a set number of characters at certain x,y coordinates (zero-indexed).
+ * 
+ * @param x x coordinate of the first character to delete
+ * @param y y coordinate of the first character to delete
+ * @param length number of characters to delete
+ */
 void erase_at(int x, int y, int length)
 {
   for (int i = 0; i < length; i++)
@@ -699,7 +1005,12 @@ void erase_at(int x, int y, int length)
   return;
 }
 
-/* Polls a keypress. Returns the code corresponding to the key. Needs to be in raw mode. */
+/**
+ * @brief Polls a keypress. Returns the code corresponding to the key. Needs to be in raw mode.
+ * This function does not wait for enter and does not work with special characters.
+ * 
+ * @return char 
+ */
 char poll_keypress()
 {
   char buf;
@@ -710,9 +1021,11 @@ char poll_keypress()
   return buf;
 }
 
-/* Polls special key presses. Return value: the 8 lsb represent (from left to right):
-BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP.
-Needs to be in raw mode.  */
+/**
+ * @brief Polls special key presses.Needs to be in raw mode. 
+ * 
+ * @return char Return value: the 8 lsb represent (from left to right): BACKSPACE SPACEBAR ENTER TAB RIGHT LEFT DOWN UP
+ */
 char poll_special_keypress()
 {
   char key;
@@ -787,19 +1100,20 @@ char poll_special_keypress()
       }
     }
 
-    // if either key was found, return
+    // if any key was found, return
     if (pressed)
       break;
   }
 
-  // hide cursor again
-  hide_cursor();
-
   return pressed;
 }
 
-/* Awaits a keypress. A message is prompted on the terminal. Pass NULL to skip.
-Needs to be in raw mode. */
+/**
+ * @brief Awaits a keypress. A message is prompted on the terminal. Needs to be in raw mode.
+ * 
+ * @param s String to print, pass NULL to skip
+ * @return int Code of the pressed key
+ */
 int await_keypress(char *s)
 {
   if (s != NULL)
@@ -813,10 +1127,15 @@ int await_keypress(char *s)
     read_bytes = read(0, buffer, 1);
   } while (read_bytes == 0);
 
-  return read_bytes;
+  return atoi(buffer[0]);
 }
 
-/* Awaits a enter keypress. A message is prompted on the terminal. Pass NULL to skip. */
+/**
+ * @brief Awaits a enter keypress. A message is prompted on the terminal. Does not work within raw mode.
+ * 
+ * @param s tring to print, pass NULL to skip
+ * @return int Code of the pressed key
+ */
 int await_enter(char *s)
 {
   if (s != NULL)
@@ -825,7 +1144,13 @@ int await_enter(char *s)
   return getchar();
 }
 
-/* Sets size of a window. Size is relative to the outer border. */
+/**
+ * @brief  Sets size of a window. Size is relative to the outer border. 
+ * 
+ * @param w pointer to window
+ * @param width desired width of the window
+ * @param height desired height of the window
+ */
 void windowSetSize(Window *w, int width, int height)
 {
   if (width < 0 || height < 0)
@@ -837,7 +1162,12 @@ void windowSetSize(Window *w, int width, int height)
   return;
 }
 
-/* Sets width of a window. Size is relative to the outer border. */
+/**
+ * @brief Sets width of a window. Size is relative to the outer border.
+ * 
+ * @param w pointer to window
+ * @param width desired width of the window
+ */
 void windowSetWidth(Window *w, int width)
 {
   if (width < 0)
@@ -852,7 +1182,12 @@ void windowSetWidth(Window *w, int width)
   return;
 }
 
-/* Sets height of a window. Size is relative to the outer border. */
+/**
+ * @brief Sets height of a window. Size is relative to the outer border.
+ * 
+ * @param w pointer to window
+ * @param height desired height of the window
+ */
 void windowSetHeight(Window *w, int height)
 {
   if (height < 0)
@@ -867,7 +1202,12 @@ void windowSetHeight(Window *w, int height)
   return;
 }
 
-/* Sets visibility of a window. */
+/**
+ * @brief Sets visibility of a window.
+ * 
+ * @param w pointer to window
+ * @param visibility 1 to make the widow visible, 0 to hide it
+ */
 void windowSetVisibility(Window *w, int visibility)
 {
   if (visibility != 0 && visibility != 1)
@@ -876,7 +1216,12 @@ void windowSetVisibility(Window *w, int visibility)
   w->visible = visibility;
 }
 
-/* Gets window size. */
+/**
+ * @brief Returns window size, if visibile. Otherwise, returns an empty rectangle.
+ * 
+ * @param w pointer to window
+ * @return Rectangle 
+ */
 Rectangle windowGetSize(Window *w)
 {
   if (w->visible)
@@ -885,25 +1230,33 @@ Rectangle windowGetSize(Window *w)
   return createRectangle(0, 0);
 }
 
-/* Sets position of a window. */
+/**
+ * @brief Sets position of a window, relative to top left corner
+ * 
+ * @param w pointer to window
+ * @param x x coordinate
+ * @param y y coordinate
+ */
 void windowSetPosition(Window *w, int x, int y)
 {
-  w->pos = createPosition(x, y);
+  w->position = createPosition(x, y);
   return;
 }
+
+// TODO continue from here
 
 /* Gets the position of a window. */
 Position windowGetPosition(Window *w)
 {
-  return w->pos;
+  return w->position;
 }
 
 /* Gets the position of the bottom right corner of the window */
 Position windowGetBottomRight(Window *w)
 {
   return (Position){
-      .x = w->pos.x + w->size.width,
-      .y = w->pos.y + w->size.height,
+      .x = w->position.x + w->size.width,
+      .y = w->position.y + w->size.height,
   };
 }
 
@@ -1001,50 +1354,50 @@ void windowSetTextStyle(Window *w, style textstyle)
 /* Returns the number of line of text of a window. */
 int windowGetLines(Window *w)
 {
-  return w->buffer_size;
+  return w->lines;
 }
 
 /* Adds a line of text to the window. Returns -1 in case of error, otherwise returns the size of the line. */
 int windowAddLine(Window *w, char *line)
 {
-  if (w->buffer_size > MAX_LINES)
+  if (w->lines > MAX_LINES)
     return -1;
 
-  _stringCopy(w->lines_buffer[w->buffer_size], line);
-  w->buffer_size++;
+  _stringCopy(w->text_buffer[w->lines], line);
+  w->lines++;
 
-  return sizeof(w->lines_buffer[w->buffer_size - 1]);
+  return sizeof(w->text_buffer[w->lines - 1]);
 }
 
 /* Changes a line of text in the window. Returns -1 in case of error, otherwise returns the size of the line. */
 int windowChangeLine(Window *w, char *line, int line_count)
 {
-  if (line_count > w->buffer_size)
+  if (line_count > w->lines)
     return -1;
 
-  _stringCopy(w->lines_buffer[line_count], line);
+  _stringCopy(w->text_buffer[line_count], line);
 
-  return sizeof(w->lines_buffer[line_count]);
+  return sizeof(w->text_buffer[line_count]);
 }
 
 /* Deletes a line of text in the window. Returns -1 in case of error, otherwise returns the number of lines. */
 int windowDeleteLine(Window *w, int line_count)
 {
-  if (line_count >= w->buffer_size)
+  if (line_count >= w->lines)
     return -1;
 
-  w->buffer_size--;
+  w->lines--;
 
-  for (int i = line_count; i < w->buffer_size; i++)
-    _stringCopy(w->lines_buffer[i], w->lines_buffer[i + 1]);
+  for (int i = line_count; i < w->lines; i++)
+    _stringCopy(w->text_buffer[i], w->text_buffer[i + 1]);
 
-  return w->buffer_size;
+  return w->lines;
 }
 
 /* Deletes a all the lines of text in the window. Returns -1 in case of error. */
 int windowDeleteAllLines(Window *w)
 {
-  w->buffer_size = 0;
+  w->lines = 0;
   return 0;
 }
 
@@ -1092,18 +1445,18 @@ void windowShow(Window *w)
   if (w->text_style != text_DEFAUlT)
     set_textmode(w->text_style);
 
-  for (int i = 0; i < w->buffer_size; i++)
+  for (int i = 0; i < w->lines; i++)
   {
     // calculate line length
-    const int ll = _stringLength(w->display_lines[i]);
+    const int ll = _stringLength(w->text[i]);
     // calculate spacing according to alignment
     int spacing = _windowCalculateSpacing(w, ll);
     // calculate line coordinates
-    const int lx = w->pos.x + w->padding + spacing + 1;
-    const int ly = w->pos.y + i + 1;
+    const int lx = w->position.x + w->padding + spacing + 1;
+    const int ly = w->position.y + i + 1;
     // draw text
     move_cursor_to(lx, ly);
-    printf("%s", w->display_lines[i]);
+    printf("%s", w->text[i]);
     fflush(NULL);
   }
 
@@ -1116,7 +1469,7 @@ void windowClear(Window *w)
 {
   reset_bg();
   for (int y = 0; y < w->size.height; y++)
-    erase_at(w->pos.x, y + w->pos.y, w->size.width);
+    erase_at(w->position.x, y + w->position.y, w->size.width);
 }
 
 /* Creates a dialog window. */

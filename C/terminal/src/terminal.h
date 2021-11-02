@@ -73,59 +73,88 @@ static const style text_DEFAUlT = 0;
 static const int DIALOG_MAX_WIDTH = 40;
 static const int DIALOG_MAX_HEIGHT = 10;
 
-typedef struct rect
+/**
+ * @brief Struct containing width and height.
+ * Mostly used in internal functions.
+ * 
+ */
+typedef struct
 {
   int width, height;
 } Rectangle;
 
-typedef struct pos
+/**
+ * @brief Struct containing x and y coordinates.
+ * Mostly used in internal functions.
+ * 
+ */
+typedef struct
 {
   int x, y;
 } Position;
 
-typedef struct rgb
+/**
+ * @brief Struct containing an RGB color.
+ * All channels are in range [0-255]
+ * 
+ */
+typedef struct
 {
   int R; // range [0-255]
   int G; // range [0-255]
   int B; // range [0-255]
 } RGB;
 
-typedef struct hsl
+/**
+ * @brief Struct containing a HSL color.
+ * H is in range [0, 359], while H and L are
+ * in range [0-99]
+ * 
+ */
+typedef struct
 {
-  int H; // range [0-360]
-  int S; // range [0-100]
-  int L; // range [0-100]
+  int H; // range [0-359]
+  int S; // range [0-99]
+  int L; // range [0-99]
 } HSL;
 
-typedef struct window
+/**
+ * @brief Struct containing a window.
+ * 
+ */
+typedef struct
 {
-  int auto_width, auto_height;
-  int buffer_size;
-  int padding;
-  int alignment;
-  int line_wrap;
-  int visible;
-  style fg_color;
-  style bg_color;
-  style text_style;
-  char lines_buffer[MAX_LINES][MAX_WIDTH];
-  char display_lines[MAX_LINES][MAX_WIDTH];
-  Rectangle size;
-  Position pos;
+  int auto_width, auto_height;            // auto resizing
+  int padding;                            // text padding in window
+  int alignment;                          // text alignment in window
+  int line_wrap;                          // sets line wrapping
+  int visible;                            // sets window visibility
+  style fg_color, bg_color, text_style;   // styling for the window
+  int lines;                              // number of lines currently in the buffer
+  char text_buffer[MAX_LINES][MAX_WIDTH]; // buffer for text
+  char text[MAX_LINES][MAX_WIDTH];        // text as displayed on the window
+  Rectangle size;                         // size of the window
+  Position position;                      // position of the top left corner
 } Window;
 
-typedef struct dialog
+/**
+ * @brief Struct containing a Dialog window
+ * 
+ */
+typedef struct
 {
-  Window *window;
-  Window *buttons[2];
-  int active_button;
+  Window *window;     // main window
+  Window *buttons[2]; // buttons, stored as window
+  int active_button;  // index of the currently selected button
 } Dialog;
 
+// struct creation
 Rectangle createRectangle(int w, int h);
 Position createPosition(int x, int y);
 RGB createRGBcolor(int R, int G, int B);
 HSL createHSLcolor(int H, int S, int L);
 
+// color conversion
 RGB HSLtoRGB(HSL color);
 RGB HUEtoRGB(double hue);
 HSL RGBtoHSL(RGB color);
