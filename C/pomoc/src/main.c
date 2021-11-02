@@ -11,7 +11,7 @@
 #include "terminal.h"
 
 /* Structs declaration */
-typedef struct phase
+typedef struct
 {
   char *name;
   int id;
@@ -252,6 +252,7 @@ void delete_parameters(Parameters *p)
 {
   pthread_mutex_destroy(p->terminal_lock);
   free(p->terminal_lock);
+  free(p->tone);
   free(p);
 }
 
