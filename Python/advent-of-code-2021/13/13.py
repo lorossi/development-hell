@@ -18,7 +18,7 @@ def parse_file(path="input"):
         if "," in x:
             points.append([int(y) for y in x.split(",")])
         else:
-            coord = x.split(" ")[-1].split("=")
+            coord = x.replace("fold along ", "").split("=")
             folds.append((coord[0], int(coord[1])))
 
     w = max(x[0] for x in points)
@@ -34,7 +34,7 @@ def parse_file(path="input"):
 
 def print_grid(grid):
     for g in grid:
-        print("".join(g))
+        print("".join(g).replace(".", " ").replace("#", "█"))
     print()
 
 
@@ -42,24 +42,18 @@ def fold_once(grid, fold):
     dir, pos = fold
 
     if dir == "y":
-        w = len(grid[pos])
-        h = len(grid)
-
         for y in range(pos):
-            m = h - y - 1
-            for x in range(w):
+            m = 2 * pos - y
+            for x in range(len(grid[pos])):
                 if grid[m][x] == "#":
                     grid[y][x] = "#"
 
         grid = grid[:pos]
 
     elif dir == "x":
-        w = pos
-        h = len(grid)
-
         for x in range(pos):
-            m = len(grid[pos]) - x - 1
-            for y in range(h):
+            m = 2 * pos - x
+            for y in range(len(grid)):
                 if grid[y][m] == "#":
                     grid[y][x] = "#"
 
