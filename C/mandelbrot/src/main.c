@@ -1,35 +1,71 @@
 //#define DEBUG
 
-#include <stdio.h> /* Standard Library of Input and Output */
-#include <png.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <complex.h> /* Standard Library of Complex Numbers */
-#include <math.h>    /* Standard Library of math */
+#include <png.h>      /* Library for png creation */
+#include <complex.h>  /* Standard Library of Complex Numbers */
+#include <math.h>     /* Standard Library of math */
+#include <sys/stat.h> /* Used for mkdir */
+#include <tgmath.h>   /* Used for log2 */
 
-const double X = 5;
-const double Y = 5;
-const double MINEXP = 1;
-const double MAXEXP = 10;
-const double COLORSPAN = 0.7;
-const int COLORREPETITIONS = 1;
-const char *FRAMESFOLDER = "output/frames/";
+const double X = 5;                           // width of the mandelbrot set
+const double Y = 5;                           // height of the mandelbrot set
+const double MIN_EXP = 1;                     // minimum exponent
+const double MAX_EXP = 10;                    // maximum exponent
+const double COLOUR_SPAN = 1;                 // hue span in a single frame
+const int COLOUR_REPETITIONS = 1;             // colour repetitions during the entire video
+const char *FRAMES_FOLDER = "output/frames/"; // folder containing all the frames
 
-#ifdef DEBUG
-const int ITEMS = 300;
-const int FRAMES = 600;
-const int WORKERS = 30;
-const int MAXITERS = 5;
-#else
-const int ITEMS = 1000;
-const int FRAMES = 900;
-const int WORKERS = 25;
-const int MAXITERS = 25;
-#endif
+const int PIXELS = 1000;    // number of pixels in a single frame
+const int FRAMES = 8;       // number of frames in the video
+const int THREADS_NUM = 8;  // number of threads
+const int MAX_ITERS = 1024; // maximum iterations for each pixel
+
+/**
+ * @brief Struct containing a single coloured pixel
+ *
+ */
+typedef struct
+{
+  uint8_t R; // red channel
+  uint8_t G; // green channel
+  uint8_t B; // blue channel
+} Pixel;
+
+/**
+ * @brief Struct containing an entire image (frame)
+ *
+ * Memory must be allocated for the image
+ */
+typedef struct
+{
+  Pixel *pixels; // array of pixels
+  size_t width;  // width of the image
+  size_t height; // height of the image
+} Bitmap;
+
+/**
+ * @brief Struct containing the parameters for a single thread
+ *
+ */
+typedef struct
+{
+  uint32_t count;  // index of the frame
+  double exponent; // exponent of the mandelbrot set
+  double offset;   // offset of the hue
+} Parameters;
 
 #ifndef __cplusplus
 
+/**
+ * @brief Max between 2 numbers
+ *
+ * @param a
+ * @param b
+ * @return double
+ */
 double max(double a, double b)
 {
   if (a > b)
@@ -37,6 +73,13 @@ double max(double a, double b)
   return b;
 }
 
+/**
+ * @brief Min between 2 numbers
+ *
+ * @param a
+ * @param b
+ * @return double
+ */
 double min(double a, double b)
 {
   if (a < b)
@@ -46,54 +89,67 @@ double min(double a, double b)
 
 #endif
 
-/* A coloured pixel. */
-typedef struct
-{
-  uint8_t R;
-  uint8_t G;
-  uint8_t B;
-} Pixel;
-
-/* A picture. */
-typedef struct
-{
-  Pixel *pixels;
-  size_t width;
-  size_t height;
-} Bitmap;
-
-typedef struct
-{
-  uint32_t count;
-  double exponent;
-  double offset;
-} Parameters;
-
+/**
+ * @brief Min between 3 numbers
+ *
+ * @param x
+ * @param y
+ * @param z
+ * @return double
+ */
 double min3(double x, double y, double z)
 {
   return min(min(x, y), z);
 }
 
-double easeOut(double x)
+/**
+ * @brief Quadratic easing in and out function
+ *
+ * @param x in range [0, 1]
+ * @return double  eased in and out number in range [0, 1]
+ */
+double ease_percent(double x)
 {
-  return 1 - pow(1 - x, 2);
+  return x < 0.5 ? 2 * pow(x, 2) : 1 - pow(-2 * x + 2, 2) / 2;
 }
 
-double easeInOut(double x)
+/**
+ * @brief Create the folder for the frames.
+ * Should work both with windows and GNU/Linux
+ *
+ * @return int 0 if successful, -1 otherwise
+ */
+int create_folder()
 {
-  return x < 0.5 ? 2 * x * x : 1 - pow(-2 * x + 2, 2) / 2;
+#ifdef __linux__
+  return mkdir(FRAMES_FOLDER, S_IRWXU);
+#else
+  return mkdir(FRAMES_FOLDER);
+#endif
 }
 
-/* Get pixel corresponding to coordinates. 
-Adapted from https://www.lemoda.net/c/write-png/ */
+/**
+ * @brief Get a pixel from the bitmap.
+ * Adapted from https://www.lemoda.net/c/write-png/
+ *
+ * @param bitmap image
+ * @param x x coordinate
+ * @param y y coordinate
+ * @return Pixel*
+ */
 Pixel *pixel_at(Bitmap *bitmap, int x, int y)
 {
   return bitmap->pixels + bitmap->width * y + x;
 }
 
-/* Write "bitmap" to a PNG file specified by "path"; returns 0 on
-success, non-zero on error.
-Adapted from https://www.lemoda.net/c/write-png/  */
+/**
+ * @brief Write bitmap to file.
+ * Adapted from https://www.lemoda.net/c/write-png/
+ *
+ * @param bitmap image to be saved
+ * @param path path to the file
+ * @return int 0 if successful, -1 otherwise
+ */
 int save_png_to_file(Bitmap *bitmap, const char *path)
 {
   FILE *fp;
@@ -105,10 +161,12 @@ int save_png_to_file(Bitmap *bitmap, const char *path)
   int pixel_size = 3;
   int depth = 8;
 
+  // try to open the destination
   fp = fopen(path, "wb");
   if (!fp)
     return -1;
 
+  // create an png image
   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if (png_ptr == NULL)
   {
@@ -116,6 +174,7 @@ int save_png_to_file(Bitmap *bitmap, const char *path)
     return -2;
   }
 
+  // create info
   info_ptr = png_create_info_struct(png_ptr);
   if (info_ptr == NULL)
   {
@@ -123,14 +182,14 @@ int save_png_to_file(Bitmap *bitmap, const char *path)
     return -3;
   }
 
+  // kinda confused about this one tbh
   if (setjmp(png_jmpbuf(png_ptr)))
   {
     png_destroy_write_struct(&png_ptr, &info_ptr);
     return -4;
   }
 
-  /* Set image attributes. */
-
+  // Set up image attributes
   png_set_IHDR(
       png_ptr,
       info_ptr,
@@ -142,7 +201,7 @@ int save_png_to_file(Bitmap *bitmap, const char *path)
       PNG_COMPRESSION_TYPE_DEFAULT,
       PNG_FILTER_TYPE_DEFAULT);
 
-  /* Initialize rows of PNG. */
+  // Initialize each row of the PNG.
   row_pointers = (png_byte **)png_malloc(png_ptr, bitmap->height * sizeof(png_byte *));
   for (y = 0; y < bitmap->height; y++)
   {
@@ -159,33 +218,42 @@ int save_png_to_file(Bitmap *bitmap, const char *path)
     }
   }
 
-  /* Write the image data to "fp". */
+  // Write image data to the pointed file
   png_init_io(png_ptr, fp);
   png_set_rows(png_ptr, info_ptr, row_pointers);
   png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
 
-  /* Free the occupied memory */
+  // Free the previously allocated memory
   for (y = 0; y < bitmap->height; y++)
-  {
     png_free(png_ptr, row_pointers[y]);
-  }
   png_free(png_ptr, row_pointers);
 
   return 0;
 }
 
+/**
+ * @brief Create a single frame
+ *
+ * @return Bitmap* pointer to the bitmap image
+ */
 Bitmap *create_frame()
 {
   Bitmap *b;
   b = (Bitmap *)malloc(sizeof(Bitmap));
-  b->width = ITEMS;
-  b->height = ITEMS;
+  b->width = PIXELS;
+  b->height = PIXELS;
   b->pixels = (Pixel *)malloc(b->width * b->height * sizeof(Pixel));
 
   return b;
 }
 
-void hueToPixel(Pixel *p, double h)
+/**
+ * @brief Convert hue and create a pixel
+ *
+ * @param p pixel to be converted
+ * @param h hue, in range [0, 1]
+ */
+void hue_to_pixel(Pixel *p, double h)
 {
   double fr, fg, fb;
   fr = fmod(5.0 + h * 6.0, 6.0);
@@ -202,39 +270,60 @@ void hueToPixel(Pixel *p, double h)
   p->B = B;
 }
 
+/**
+ * @brief Delete a frame
+ *
+ * @param b image to be deleted
+ */
 void delete_frame(Bitmap *b)
 {
   free(b->pixels);
   free(b);
 }
 
+/**
+ * @brief Calculate the number of iterations before the point diverges
+ *
+ * @param x x coordinate of the point
+ * @param y y coordinate of the point
+ * @param exponent mandelbrot set exponent
+ * @return int number of iterations before the point diverges
+ */
 int calculate_iters(int x, int y, double exponent)
 {
-  const double MAXDIST = sqrt(X * X + Y * Y);
-  const double re = (double)x / ITEMS * X - X / 2;
-  const double im = (double)y / ITEMS * Y - Y / 2;
+  const double MAX_DIST = sqrt(X * X + Y * Y);      // max distance from origin
+  const double re = (double)x / PIXELS * X - X / 2; // real part of c
+  const double im = (double)y / PIXELS * Y - Y / 2; // imaginary part of c
   double complex c = CMPLX(re, im);
   double complex z = 0;
 
   int iters = 0;
 
-  while (++iters < MAXITERS && cabs(z) < MAXDIST)
-    z = cpow(z, exponent) + c;
+  while (++iters < MAX_ITERS && cabs(z) < MAX_DIST)
+    z = cpow(z, exponent) + c; // mandelbrot set equation
 
   return iters;
 }
 
+/**
+ * @brief Fill a frame with the mandelbrot set
+ *
+ * @param b image to be filled
+ * @param exponent mandelbrot set exponent
+ * @param offset hue offset
+ */
 void populate_frame(Bitmap *b, double exponent, double offset)
 {
 
-  for (int y = 0; y < ITEMS; y++)
+  for (int y = 0; y < PIXELS; y++)
   {
-    for (int x = 0; x < ITEMS; x++)
+    for (int x = 0; x < PIXELS; x++)
     {
       const int iters = calculate_iters(x, y, exponent);
       Pixel *p = pixel_at(b, x, y);
 
-      if (iters == MAXITERS)
+      // set to black if diverged
+      if (iters >= MAX_ITERS)
       {
         p->R = 0;
         p->G = 0;
@@ -242,20 +331,30 @@ void populate_frame(Bitmap *b, double exponent, double offset)
       }
       else
       {
-        double percent = easeOut((double)iters / MAXITERS);
-        double hue = fmod(percent * COLORSPAN + offset, 1);
-        hueToPixel(p, hue);
+        // calculate hue as easing of iterations over the maximum number of iterations
+        // hue is then offset by a certain value, constant for each frame
+
+        double percent = (double)(iters) / MAX_ITERS;
+        double hue = fmod(percent * COLOUR_SPAN + offset, 1);
+        // put the hue into the frame
+        hue_to_pixel(p, hue);
       }
     }
   }
 }
 
+/**
+ * @brief Single thread
+ *
+ * @param args arguments of the thread
+ * @return void*
+ */
 void *thread(void *args)
 {
   Parameters *p = (Parameters *)args;
 
   char filename[50];
-  sprintf(filename, "%s%07d.png", FRAMESFOLDER, p->count);
+  sprintf(filename, "%s%07d.png", FRAMES_FOLDER, p->count);
 
   Bitmap *frame = create_frame();
   populate_frame(frame, p->exponent, p->offset);
@@ -269,27 +368,33 @@ void *thread(void *args)
 
 int main()
 {
+  // create folder if it doesn't exist
+  printf("Creating folder %s\n", FRAMES_FOLDER);
+  create_folder();
 
-  for (int j = 0; j < FRAMES; j += WORKERS)
+  // here we go!
+  printf("Attempting to generate %d frames.\n", FRAMES);
+
+  for (int j = 0; j < FRAMES; j += THREADS_NUM)
   {
-    printf("Generating frames %d-%d\n", j, j + WORKERS - 1);
+    printf("Generating frames %d-%d\n", j, j + THREADS_NUM - 1);
 
-    pthread_t threads[WORKERS];
-    Parameters params[WORKERS];
+    pthread_t threads[THREADS_NUM];
+    Parameters params[THREADS_NUM];
 
-    for (int i = 0; i < WORKERS; i++)
+    // divide the frames creation into threads
+    for (int i = 0; i < THREADS_NUM; i++)
     {
-      const double percent = easeInOut((double)(i + j) / FRAMES);
+      const double percent = ease_percent((double)(i + j) / FRAMES);
       params[i].count = i + j;
-      params[i].exponent = percent * (MAXEXP - MINEXP) + MINEXP;
-      params[i].offset = percent * COLORREPETITIONS;
-      pthread_create(&threads[i], NULL, thread, &params[i]);
+      params[i].exponent = percent * (MAX_EXP - MIN_EXP) + MIN_EXP;
+      params[i].offset = percent * COLOUR_REPETITIONS;
+      pthread_create(threads + i, NULL, thread, params + i);
     }
 
-    for (int i = 0; i < WORKERS; i++)
-    {
+    // wait for completion of all threads
+    for (int i = 0; i < THREADS_NUM; i++)
       pthread_join(threads[i], NULL);
-    }
   }
 
   printf("All done!\n");
