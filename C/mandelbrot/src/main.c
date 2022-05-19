@@ -14,14 +14,22 @@ const double X = 5;                           // width of the mandelbrot set
 const double Y = 5;                           // height of the mandelbrot set
 const double MIN_EXP = 1;                     // minimum exponent
 const double MAX_EXP = 10;                    // maximum exponent
-const double COLOUR_SPAN = 1;                 // hue span in a single frame
-const int COLOUR_REPETITIONS = 1;             // colour repetitions during the entire video
+const double COLOUR_RANGE = 0.25;             // hue range within a frame
 const char *FRAMES_FOLDER = "output/frames/"; // folder containing all the frames
 
+// #define DEBUG
+
+#ifdef DEBUG
+const int PIXELS = 1000;
+const int FRAMES = 10;
+const int THREADS_NUM = 8;
+const int MAX_ITERS = 1000;
+#else
 const int PIXELS = 1000;    // number of pixels in a single frame
-const int FRAMES = 8;       // number of frames in the video
+const int FRAMES = 900;     // number of frames in the video
 const int THREADS_NUM = 8;  // number of threads
 const int MAX_ITERS = 1024; // maximum iterations for each pixel
+#endif
 
 /**
  * @brief Struct containing a single coloured pixel
@@ -57,8 +65,6 @@ typedef struct
   double offset;   // offset of the hue
 } Parameters;
 
-#ifndef __cplusplus
-
 /**
  * @brief Max between 2 numbers
  *
@@ -86,8 +92,6 @@ double min(double a, double b)
     return a;
   return b;
 }
-
-#endif
 
 /**
  * @brief Min between 3 numbers
@@ -253,7 +257,7 @@ Bitmap *create_frame()
  * @param p pixel to be converted
  * @param h hue, in range [0, 1]
  */
-void hue_to_pixel(Pixel *p, double h)
+void hue_to_pixel(double h, Pixel *p)
 {
   double fr, fg, fb;
   fr = fmod(5.0 + h * 6.0, 6.0);
@@ -302,7 +306,10 @@ int calculate_iters(int x, int y, double exponent)
   while (++iters < MAX_ITERS && cabs(z) < MAX_DIST)
     z = cpow(z, exponent) + c; // mandelbrot set equation
 
-  return iters;
+  if (iters == MAX_ITERS)
+    return iters;
+
+  return max(0, iters + 1 + log(log(cabs(z))) / log(2));
 }
 
 /**
@@ -310,11 +317,9 @@ int calculate_iters(int x, int y, double exponent)
  *
  * @param b image to be filled
  * @param exponent mandelbrot set exponent
- * @param offset hue offset
  */
 void populate_frame(Bitmap *b, double exponent, double offset)
 {
-
   for (int y = 0; y < PIXELS; y++)
   {
     for (int x = 0; x < PIXELS; x++)
@@ -331,13 +336,8 @@ void populate_frame(Bitmap *b, double exponent, double offset)
       }
       else
       {
-        // calculate hue as easing of iterations over the maximum number of iterations
-        // hue is then offset by a certain value, constant for each frame
-
-        double percent = (double)(iters) / MAX_ITERS;
-        double hue = fmod(percent * COLOUR_SPAN + offset, 1);
-        // put the hue into the frame
-        hue_to_pixel(p, hue);
+        const double h = fmod(fmod((double)iters / MAX_ITERS, COLOUR_RANGE) + offset, 1);
+        hue_to_pixel(h, p);
       }
     }
   }
@@ -377,7 +377,7 @@ int main()
 
   for (int j = 0; j < FRAMES; j += THREADS_NUM)
   {
-    printf("Generating frames %d-%d\n", j, j + THREADS_NUM - 1);
+    printf("Generating frames %d-%d\n", j, (int)min(j + THREADS_NUM - 1, FRAMES));
 
     pthread_t threads[THREADS_NUM];
     Parameters params[THREADS_NUM];
@@ -388,7 +388,7 @@ int main()
       const double percent = ease_percent((double)(i + j) / FRAMES);
       params[i].count = i + j;
       params[i].exponent = percent * (MAX_EXP - MIN_EXP) + MIN_EXP;
-      params[i].offset = percent * COLOUR_REPETITIONS;
+      params[i].offset = percent;
       pthread_create(threads + i, NULL, thread, params + i);
     }
 
