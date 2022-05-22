@@ -9,27 +9,7 @@
 #include <math.h>     /* Standard Library of math */
 #include <sys/stat.h> /* Used for mkdir */
 #include <tgmath.h>   /* Used for log2 */
-
-const double X = 5;                           // width of the mandelbrot set
-const double Y = 5;                           // height of the mandelbrot set
-const double MIN_EXP = 1;                     // minimum exponent
-const double MAX_EXP = 10;                    // maximum exponent
-const double COLOUR_RANGE = 0.25;             // hue range within a frame
-const char *FRAMES_FOLDER = "output/frames/"; // folder containing all the frames
-
-// #define DEBUG
-
-#ifdef DEBUG
-const int PIXELS = 1000;
-const int FRAMES = 10;
-const int THREADS_NUM = 8;
-const int MAX_ITERS = 1000;
-#else
-const int PIXELS = 1000;    // number of pixels in a single frame
-const int FRAMES = 900;     // number of frames in the video
-const int THREADS_NUM = 8;  // number of threads
-const int MAX_ITERS = 1024; // maximum iterations for each pixel
-#endif
+#include <time.h>     /* Used for time measurement */
 
 /**
  * @brief Struct containing a single coloured pixel
@@ -65,6 +45,28 @@ typedef struct
   double offset;   // offset of the hue
 } Parameters;
 
+const double Y = 5;                           // height of the mandelbrot set
+const double X = 5;                           // width of the mandelbrot set
+const double MIN_EXP = 1;                     // minimum exponent
+const double MAX_EXP = 10;                    // maximum exponent
+const char *FRAMES_FOLDER = "output/frames/"; // folder containing all the frames
+const int PALETTE_SCL = 64;                   // scale of the palette smoothing
+const int PALETTE_SIZE = 5;                   // size of the palette
+
+const Pixel PALETTE[] = {
+    (Pixel){170, 255, 1},
+    (Pixel){255, 143, 1},
+    (Pixel){255, 0, 170},
+    (Pixel){170, 0, 255},
+    (Pixel){0, 170, 255},
+};
+Pixel SMOOTH_PALETTE[64 * 5]; // destination of the smoothed palette
+
+const int FRAME_SIZE = 1000; // number of pixels in a single frame
+const int FRAMES = 1800;     // number of frames in the video
+const int THREADS_NUM = 8;   // number of threads
+const int MAX_ITERS = 1024;  // maximum iterations for each pixel
+
 /**
  * @brief Max between 2 numbers
  *
@@ -94,27 +96,30 @@ double min(double a, double b)
 }
 
 /**
- * @brief Min between 3 numbers
+ * @brief Polynomial easing in and out function
  *
- * @param x
- * @param y
- * @param z
+ * @param x variable to ease
+ * @param n degree of the polynomial
  * @return double
  */
-double min3(double x, double y, double z)
+double poly_ease(double x, double n)
 {
-  return min(min(x, y), z);
+  return x < 0.5 ? pow(2, n - 1) * pow(x, n) : 1 - pow(-2 * x + 2, n) / 2;
 }
 
 /**
- * @brief Quadratic easing in and out function
+ * @brief Map a value from one range to another
  *
- * @param x in range [0, 1]
- * @return double  eased in and out number in range [0, 1]
+ * @param x value to map
+ * @param in_min old range minimum
+ * @param in_max old range maximum
+ * @param out_min new rang minimum
+ * @param out_max new range maximum
+ * @return double
  */
-double ease_percent(double x)
+double map(double x, double in_min, double in_max, double out_min, double out_max)
 {
-  return x < 0.5 ? 2 * pow(x, 2) : 1 - pow(-2 * x + 2, 2) / 2;
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 /**
@@ -130,6 +135,31 @@ int create_folder()
 #else
   return mkdir(FRAMES_FOLDER);
 #endif
+}
+
+/**
+ * @brief Create a smooth palette
+ */
+void create_palette()
+{
+
+  for (int i = 0; i < PALETTE_SIZE; i++)
+  {
+    int current = i;
+    int next = i < PALETTE_SIZE - 1 ? i + 1 : 0;
+
+    for (int j = 0; j < PALETTE_SCL; j++)
+    {
+      double percent = (double)j / (PALETTE_SCL - 1);
+      double smooth = poly_ease(percent, 2);
+
+      *(SMOOTH_PALETTE + i * PALETTE_SCL + j) = (Pixel){
+          .R = (uint8_t)((1 - smooth) * (double)PALETTE[current].R + smooth * (double)PALETTE[next].R),
+          .G = (uint8_t)((1 - smooth) * (double)PALETTE[current].G + smooth * (double)PALETTE[next].G),
+          .B = (uint8_t)((1 - smooth) * (double)PALETTE[current].B + smooth * (double)PALETTE[next].B),
+      };
+    }
+  }
 }
 
 /**
@@ -154,7 +184,7 @@ Pixel *pixel_at(Bitmap *bitmap, int x, int y)
  * @param path path to the file
  * @return int 0 if successful, -1 otherwise
  */
-int save_png_to_file(Bitmap *bitmap, const char *path)
+int save_frame_to_file(Bitmap *bitmap, const char *path)
 {
   FILE *fp;
   png_structp png_ptr = NULL;
@@ -240,38 +270,31 @@ int save_png_to_file(Bitmap *bitmap, const char *path)
  *
  * @return Bitmap* pointer to the bitmap image
  */
-Bitmap *create_frame()
+Bitmap *create_frame(int size)
 {
   Bitmap *b;
   b = (Bitmap *)malloc(sizeof(Bitmap));
-  b->width = PIXELS;
-  b->height = PIXELS;
+  b->width = size;
+  b->height = size;
   b->pixels = (Pixel *)malloc(b->width * b->height * sizeof(Pixel));
 
   return b;
 }
 
 /**
- * @brief Convert hue and create a pixel
+ * @brief Convert the number of iterations to a colour from the palette
  *
- * @param p pixel to be converted
- * @param h hue, in range [0, 1]
+ * @param iters number of iterations
+ * @param p destination pixel
  */
-void hue_to_pixel(double h, Pixel *p)
+void iters_to_pixel(int iters, Pixel *p)
 {
-  double fr, fg, fb;
-  fr = fmod(5.0 + h * 6.0, 6.0);
-  fg = fmod(3.0 + h * 6.0, 6.0);
-  fb = fmod(1.0 + h * 6.0, 6.0);
-
-  uint8_t R, G, B;
-  R = 255 * (1 - max(min3(fr, 4 - fr, 1), (double)0));
-  G = 255 * (1 - max(min3(fg, 4 - fg, 1), (double)0));
-  B = 255 * (1 - max(min3(fb, 4 - fb, 1), (double)0));
-
-  p->R = R;
-  p->G = G;
-  p->B = B;
+  // calculate the palette index
+  int index = iters % (PALETTE_SIZE * PALETTE_SCL);
+  // assign colours
+  p->R = SMOOTH_PALETTE[index].R;
+  p->G = SMOOTH_PALETTE[index].G;
+  p->B = SMOOTH_PALETTE[index].B;
 }
 
 /**
@@ -295,9 +318,9 @@ void delete_frame(Bitmap *b)
  */
 int calculate_iters(int x, int y, double exponent)
 {
-  const double MAX_DIST = sqrt(X * X + Y * Y);      // max distance from origin
-  const double re = (double)x / PIXELS * X - X / 2; // real part of c
-  const double im = (double)y / PIXELS * Y - Y / 2; // imaginary part of c
+  const double MAX_DIST = sqrt(X * X + Y * Y);          // max distance from origin
+  const double re = (double)x / FRAME_SIZE * X - X / 2; // real part of c
+  const double im = (double)y / FRAME_SIZE * Y - Y / 2; // imaginary part of c
   double complex c = CMPLX(re, im);
   double complex z = 0;
 
@@ -320,11 +343,11 @@ int calculate_iters(int x, int y, double exponent)
  */
 void populate_frame(Bitmap *b, double exponent, double offset)
 {
-  for (int y = 0; y < PIXELS; y++)
+  for (int y = 0; y < FRAME_SIZE; y++)
   {
-    for (int x = 0; x < PIXELS; x++)
+    for (int x = 0; x < FRAME_SIZE; x++)
     {
-      const int iters = calculate_iters(x, y, exponent);
+      int iters = calculate_iters(x, y, exponent);
       Pixel *p = pixel_at(b, x, y);
 
       // set to black if diverged
@@ -336,11 +359,36 @@ void populate_frame(Bitmap *b, double exponent, double offset)
       }
       else
       {
-        const double h = fmod(fmod((double)iters / MAX_ITERS, COLOUR_RANGE) + offset, 1);
-        hue_to_pixel(h, p);
+        iters += offset * (PALETTE_SIZE * PALETTE_SCL);
+        iters_to_pixel(iters, p);
       }
     }
   }
+}
+
+/**
+ * @brief Create a test file containing the smoothed palette
+ *
+ */
+void test_palette()
+{
+  const char *path = "palette.png";
+  const int frame_size = PALETTE_SIZE * PALETTE_SCL;
+  Bitmap *b = create_frame(frame_size);
+
+  for (int x = 0; x < frame_size; x++)
+  {
+    for (int y = 0; y < frame_size; y++)
+    {
+      Pixel *p = pixel_at(b, x, y);
+      p->R = SMOOTH_PALETTE[x].R;
+      p->G = SMOOTH_PALETTE[x].G;
+      p->B = SMOOTH_PALETTE[x].B;
+    }
+  }
+  save_frame_to_file(b, path);
+  delete_frame(b);
+  return;
 }
 
 /**
@@ -356,9 +404,9 @@ void *thread(void *args)
   char filename[50];
   sprintf(filename, "%s%07d.png", FRAMES_FOLDER, p->count);
 
-  Bitmap *frame = create_frame();
+  Bitmap *frame = create_frame(FRAME_SIZE);
   populate_frame(frame, p->exponent, p->offset);
-  save_png_to_file(frame, filename);
+  save_frame_to_file(frame, filename);
   delete_frame(frame);
 
   printf("\tgenerated frame %d\n", p->count);
@@ -368,9 +416,20 @@ void *thread(void *args)
 
 int main()
 {
+  clock_t started;
+  started = clock();
+
   // create folder if it doesn't exist
   printf("Creating folder %s\n", FRAMES_FOLDER);
   create_folder();
+
+  // smooth colours
+  printf("Smoothing colours\n");
+  create_palette(SMOOTH_PALETTE);
+
+  // test palette
+  printf("Testing palette\n");
+  test_palette();
 
   // here we go!
   printf("Attempting to generate %d frames.\n", FRAMES);
@@ -385,7 +444,7 @@ int main()
     // divide the frames creation into threads
     for (int i = 0; i < THREADS_NUM; i++)
     {
-      const double percent = ease_percent((double)(i + j) / FRAMES);
+      const double percent = poly_ease((double)(i + j) / FRAMES, 2);
       params[i].count = i + j;
       params[i].exponent = percent * (MAX_EXP - MIN_EXP) + MIN_EXP;
       params[i].offset = percent;
@@ -398,6 +457,12 @@ int main()
   }
 
   printf("All done!\n");
+
+  clock_t ended = clock();
+  double time_spent = (double)(ended - started) / CLOCKS_PER_SEC;
+  double fps = FRAMES / time_spent;
+  printf("Time taken: %f seconds\n", time_spent);
+  printf("FPS: %f\n", fps);
 
   return 0;
 }
