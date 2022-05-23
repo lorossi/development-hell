@@ -49,23 +49,25 @@ const double Y = 5;                           // height of the mandelbrot set
 const double X = 5;                           // width of the mandelbrot set
 const double MIN_EXP = 1;                     // minimum exponent
 const double MAX_EXP = 10;                    // maximum exponent
+const double COLOUR_REPETITIONS = 1;          // number of repetitions of the colour gradient
 const char *FRAMES_FOLDER = "output/frames/"; // folder containing all the frames
-const int PALETTE_SCL = 64;                   // scale of the palette smoothing
-const int PALETTE_SIZE = 5;                   // size of the palette
+const int FRAME_SIZE = 1000;                  // number of pixels in a single frame
+const int FRAMES = 900;                       // number of frames in the video
+const int THREADS_NUM = 16;                   // number of threads
+const int MAX_ITERS = 512;                    // maximum iterations for each pixel
 
+const int PALETTE_SCL = 24; // scale of the palette smoothing
+const int PALETTE_SIZE = 5; // size of the palette
 const Pixel PALETTE[] = {
-    (Pixel){170, 255, 1},
-    (Pixel){255, 143, 1},
-    (Pixel){255, 0, 170},
-    (Pixel){170, 0, 255},
-    (Pixel){0, 170, 255},
+    // starting palette
+    (Pixel){237, 174, 73},
+    (Pixel){209, 73, 91},
+    (Pixel){0, 121, 140},
+    (Pixel){48, 99, 142},
+    (Pixel){0, 61, 91},
 };
-Pixel SMOOTH_PALETTE[64 * 5]; // destination of the smoothed palette
 
-const int FRAME_SIZE = 1000; // number of pixels in a single frame
-const int FRAMES = 1800;     // number of frames in the video
-const int THREADS_NUM = 8;   // number of threads
-const int MAX_ITERS = 1024;  // maximum iterations for each pixel
+Pixel *SMOOTH_PALETTE;
 
 /**
  * @brief Max between 2 numbers
@@ -142,6 +144,7 @@ int create_folder()
  */
 void create_palette()
 {
+  SMOOTH_PALETTE = (Pixel *)malloc(sizeof(Pixel) * PALETTE_SIZE * PALETTE_SCL);
 
   for (int i = 0; i < PALETTE_SIZE; i++)
   {
@@ -151,7 +154,7 @@ void create_palette()
     for (int j = 0; j < PALETTE_SCL; j++)
     {
       double percent = (double)j / (PALETTE_SCL - 1);
-      double smooth = poly_ease(percent, 2);
+      double smooth = poly_ease(percent, 3);
 
       *(SMOOTH_PALETTE + i * PALETTE_SCL + j) = (Pixel){
           .R = (uint8_t)((1 - smooth) * (double)PALETTE[current].R + smooth * (double)PALETTE[next].R),
@@ -160,6 +163,15 @@ void create_palette()
       };
     }
   }
+}
+
+/**
+ * @brief Delete the smooth palette
+ *
+ */
+void delete_palette()
+{
+  free(SMOOTH_PALETTE);
 }
 
 /**
@@ -359,7 +371,7 @@ void populate_frame(Bitmap *b, double exponent, double offset)
       }
       else
       {
-        iters += offset * (PALETTE_SIZE * PALETTE_SCL);
+        iters += offset * PALETTE_SIZE * PALETTE_SCL * COLOUR_REPETITIONS;
         iters_to_pixel(iters, p);
       }
     }
@@ -444,7 +456,7 @@ int main()
     // divide the frames creation into threads
     for (int i = 0; i < THREADS_NUM; i++)
     {
-      const double percent = poly_ease((double)(i + j) / FRAMES, 2);
+      const double percent = poly_ease((double)(i + j) / FRAMES, 3);
       params[i].count = i + j;
       params[i].exponent = percent * (MAX_EXP - MIN_EXP) + MIN_EXP;
       params[i].offset = percent;
@@ -455,6 +467,11 @@ int main()
     for (int i = 0; i < THREADS_NUM; i++)
       pthread_join(threads[i], NULL);
   }
+
+  printf("Frame generation completed\n");
+
+  printf("Deleting palette\n");
+  delete_palette(SMOOTH_PALETTE);
 
   printf("All done!\n");
 
